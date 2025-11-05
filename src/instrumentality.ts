@@ -266,14 +266,14 @@ export class RoadErr extends AnyErr {
   }
 }
 
-export function road_factory(..._lookFor: string[]): Road {
-  const entryType = to_RoadT(path.join(..._lookFor))
+export function road_factory(_lookFor: string): Road {
+  const entryType = to_RoadT(_lookFor)
   if (entryType === RoadT.FOLDER)
-    return new Folder(false, ..._lookFor)
+    return new Folder(_lookFor)
   else if (entryType === RoadT.FILE)
-    return new File(false, ..._lookFor)
+    return new File(_lookFor)
   else
-    return new BizarreRoad(..._lookFor)
+    return new BizarreRoad(_lookFor)
 }
 
 
@@ -293,14 +293,14 @@ export abstract class Road {
   isAt: string
 
 
-  constructor(..._pathAsJoinableOrByItself: string[]) {
+  constructor(_lookFor: string) {
     /*
       Find and resolve the absolute path of _lookFor
       with optional check to _shouldBeOfType
     */
-    if (!fs.existsSync(path.join(..._pathAsJoinableOrByItself)))
+    if (!fs.existsSync(_lookFor))
       throw new RoadErr(this, "Not found")
-    this.isAt = path.resolve(path.join(..._pathAsJoinableOrByItself))
+    this.isAt = path.resolve(_lookFor)
   }
 
 
@@ -341,7 +341,7 @@ export abstract class Road {
 
 
   parent(): Folder {
-    return new Folder(false, path.dirname(this.isAt))
+    return new Folder(path.dirname(this.isAt))
   }
 
 
@@ -406,8 +406,8 @@ export class BizarreRoad extends Road {
   readonly originalType: RoadT // To remember own type
 
 
-  constructor(..._lookFor: string[]) {
-    super(..._lookFor)
+  constructor(_lookFor: string) {
+    super(_lookFor)
     this.originalType = this.type()
     if (this.originalType === RoadT.FILE || this.originalType=== RoadT.FOLDER)
       throw new RoadErr(this, `Type missmatch: ${this.originalType} is too normal (?), use other generalization of ${super.constructor.name} instead`)
@@ -425,11 +425,11 @@ export class Folder extends Road {
   /*
     Handles folders in the file system
   */
-  constructor(_createIfNotExists: boolean, ..._lookFor: string[]) {
-    if (_createIfNotExists && !fs.existsSync(path.join(..._lookFor)))
-      fs.mkdirSync(path.join(..._lookFor), { recursive: true })
-    super(..._lookFor)
-    if (!fs.existsSync(path.join(..._lookFor)) || this.type() !== RoadT.FOLDER)
+  constructor(_lookFor: string, _createIfNotExists: boolean = false) {
+    if (_createIfNotExists && !fs.existsSync(_lookFor))
+      fs.mkdirSync(_lookFor, { recursive: true })
+    super(_lookFor)
+    if (!fs.existsSync(_lookFor) || this.type() !== RoadT.FOLDER)
       throw new RoadErr(this, "Type missmatch: Should be folder")
   }
 
@@ -460,7 +460,7 @@ export class Folder extends Road {
 
 
   override copy_self_into(_copyInto: Folder, _options: fs.CopySyncOptions = { recursive: true }): this {
-    const newFolder = new Folder(false, path.join(_copyInto.isAt, this.name()))
+    const newFolder = new Folder(path.join(_copyInto.isAt, this.name()))
     fs.cpSync(this.isAt, newFolder.isAt, _options) // Merges
     return newFolder as this
   }
@@ -477,11 +477,11 @@ export class File extends Road {
   /*
     Handles files in the file system
   */
-  constructor(_createIfNotExists: boolean, ..._lookFor: string[]) {
-    if (_createIfNotExists && !fs.existsSync(path.join(..._lookFor)))
-      fs.writeFileSync(path.join(..._lookFor), "")
-    super(path.join(..._lookFor))
-    if (!fs.existsSync(path.join(..._lookFor)) || this.type() !== RoadT.FILE)
+  constructor(_lookFor: string, _createIfNotExists: boolean = false) {
+    if (_createIfNotExists && !fs.existsSync(_lookFor))
+      fs.writeFileSync(_lookFor, "")
+    super(_lookFor)
+    if (!fs.existsSync(_lookFor) || this.type() !== RoadT.FILE)
       throw new RoadErr(this, "Type missmatch: Should be file")
   }
 
