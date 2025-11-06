@@ -1,24 +1,42 @@
 {
   "name": "ts-instrumentality",
   "version": "1.0.4",
-  "homepage": "https://github.com/ZiggityZaza/ts-instrumentality#readme",
-  "bugs": {
-    "url": "https://github.com/ZiggityZaza/ts-instrumentality/issues"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/ZiggityZaza/ts-instrumentality.git"
-  },
-  "main": "./dist/instrumentality.js",
-  "types": "./dist/instrumentality.d.ts",
+  "main": "./dist/base.js",
+  "types": "./dist/base.d.ts",
   "files": ["dist"],
   "type": "module",
+
+  "exports": {
+    ".": {
+      "browser": {
+        "types": "./dist/dom.d.ts",
+        "import": "./dist/dom.js"
+      },
+      "node": {
+        "types": "./dist/node.d.ts",
+        "import": "./dist/node.js"
+      },
+      "default": {
+        "types": "./dist/base.d.ts",
+        "import": "./dist/base.js"
+      }
+    },
+    "./base": {
+      "types": "./dist/base.d.ts",
+      "import": "./dist/base.js"
+    },
+    "./dom": {
+      "types": "./dist/dom.d.ts",
+      "import": "./dist/dom.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js"
+    }
+  },
+
   "scripts": {
-    "dev": "tsx src/instrumentality.ts",
-    "build": "tsc",
-    "start": "node dist/instrumentality.js",
-    "prepare": "npm run build",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "prepare": "tsc"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",
