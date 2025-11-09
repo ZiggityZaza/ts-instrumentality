@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process"
 
 
 
-// Node specific
+
 export const IS_WINDOWS = process.platform === "win32" as const
 
 
@@ -149,7 +149,9 @@ export abstract class Road {
 
 
   move_self_into(_moveInto: Folder): void {
-    // Default attempt to move
+    /*
+      Default attempt to move
+    */
     const destPath = path.join(_moveInto.isAt, this.name())
     if (fs.existsSync(destPath))
       throw new RoadErr(this, `Destination: '${destPath}' already exists`)
@@ -159,7 +161,9 @@ export abstract class Road {
 
 
   copy_self_into(_copyInto: Folder): this {
-    // Default attempt to copy
+    /*
+      Default attempt to copy
+    */
     const destPath = path.join(_copyInto.isAt, this.name())
     if (fs.existsSync(destPath))
       throw new RoadErr(this, `Destination: '${destPath}' already exists`)
@@ -172,7 +176,20 @@ export abstract class Road {
       if (result.status !== 0)
         throw new RoadErr(this, `Failed to copy special file: ${result.stderr?.toString() || "unknown error"}`)
     }
-    return this.cpy(destPath);
+    return this.cpy(destPath)
+  }
+
+
+  delete_self(): void {
+    /*
+      Default attempt to delete
+      Note:
+        Might not handle folders/files with special
+        types (pipes, sockets, etc.) properly idk why
+    */
+    if (!fs.existsSync(this.isAt))
+      return
+    fs.unlinkSync(this.isAt)
   }
 }
 
@@ -250,6 +267,13 @@ export class Folder extends Road {
   override exists(): boolean {
     return fs.existsSync(this.isAt) && this.type() === RoadT.FOLDER
   }
+
+
+  override delete_self(_options: fs.RmOptions = { recursive: true, force: true }): void {
+    if (!fs.existsSync(this.isAt))
+      return
+    fs.rmSync(this.isAt, _options)
+  }
 }
 
 
@@ -264,11 +288,6 @@ export class File extends Road {
     super(_lookFor)
     if (!fs.existsSync(_lookFor) || this.type() !== RoadT.FILE)
       throw new RoadErr(this, "Type missmatch: Should be file")
-  }
-
-
-  override exists(): boolean {
-    return fs.existsSync(this.isAt) && this.type() === RoadT.FILE
   }
 
 
@@ -294,6 +313,11 @@ export class File extends Road {
   size_in_bytes(): number {
     return fs.statSync(this.isAt).size
   }
+
+
+  override exists(): boolean {
+    return fs.existsSync(this.isAt) && this.type() === RoadT.FILE
+  }
 }
 
 
@@ -310,13 +334,9 @@ export class TempFile extends File {
     super(path.join(os.tmpdir(), tempName), true)
   }
 
-  cleanup(): void {
-    if (this.exists())
-      fs.unlinkSync(this.isAt)
-  }
 
   [Symbol.dispose](): void {
-    this.cleanup()
+    this.delete_self()
   }
 }
 
@@ -328,7 +348,7 @@ export class TempFolder extends Folder {
     temporary directory.
     Note:
       Destructor also takes all entries in the folder
-      into account and deletes them.
+      into account and deletes them ALL
   */
   constructor() {
     let tempName: string = `TempFolder_${scramble_name()}`
@@ -337,12 +357,8 @@ export class TempFolder extends Folder {
     super(path.join(os.tmpdir(), tempName), true)
   }
 
-  cleanup(): void {
-    if (this.exists())
-      fs.rmSync(this.isAt, { recursive: true, force: true })
-  }
 
   [Symbol.dispose](): void {
-    this.cleanup()
+    this.delete_self()
   }
 }

@@ -34,8 +34,9 @@
     }
   },
   "scripts": {
-    "test": "vitest",
-    "prepare": "tsc"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepare": "npx tsc"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",

@@ -219,7 +219,7 @@ export class NetErr extends AnyErr {
 }
 
 
-export async function get<T>(_url: string, _args?: Record<string, string>, _init: RequestInit = { method: 'GET' }): Promise<T> {
+export async function get<T = any>(_url: string, _args?: Record<string, string>, _init: RequestInit = { method: 'GET' }): Promise<T> {
   /*
     Grab something out of the internet and parse it
     as JSON (or throw)
@@ -232,7 +232,7 @@ export async function get<T>(_url: string, _args?: Record<string, string>, _init
 
 
 
-export async function post<T>(_url: string, _body: Record<string, any>, _init: RequestInit = { method: 'POST', headers: {"Content-Type": "application/json"} }): Promise<T> {
+export async function post<T = any>(_url: string, _body: Record<string, any>, _init: RequestInit = { method: 'POST', headers: {"Content-Type": "application/json"} }): Promise<T> {
   /*
     Post something to the internet and parse it
   */
@@ -243,13 +243,24 @@ export async function post<T>(_url: string, _body: Record<string, any>, _init: R
     method: _init.method ?? 'POST'
   })
   if (!response.ok)
-    throw new NetErr(`Failed to post ${_url} with init request ${_init}`, response.status, response.statusText)
+    throw new NetErr(`Failed to post ${_url} with init request ${JSON.stringify(_init)}`, response.status, response.statusText)
   return (await response.json()) as T
 }
 
 
 
-export function scramble_name(_length: number = 64 /*~59^n possible combinations*/ ): string {
+export function scramble_name(_length: number = 64 /*~62^n possible combinations*/ ): string {
   const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" as const
-  return Array.from({ length: _length }, () => chars[Math.floor(Math.random() * 62)]).join("")
+  return Array.from({ length: _length }, () => chars[Math.floor(Math.random() * chars.length)]).join("")
+}
+
+
+
+export function roll_dice(_min: number, _max: number): number {
+  /*
+    Roll a number between _min and _max (exclusive)
+  */
+  if (_min > _max)
+    [_min, _max] = [_max, _min]
+  return Math.floor(Math.random() * (_max - _min)) + _min
 }
