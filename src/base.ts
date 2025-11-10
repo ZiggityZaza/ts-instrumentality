@@ -70,31 +70,6 @@ export function or_err<T>(_x: T | undefined | null, _msg = "value existence asse
 
 
 
-export class TrimErr extends AnyErr {}
-export const TRIM_WITH = '...' as const
-export function trim_begin(_str: string, _maxLen: number): string {
-  /*
-    Shorten string from the beginning if it exceeds `_maxLen`
-  */
-  if (_maxLen <= TRIM_WITH.length)
-    throw new TrimErr(`trim_begin _maxLen too short: ${_maxLen}`)
-  if (_str.length <= _maxLen)
-    return _str
-  return TRIM_WITH + _str.slice(_str.length - (_maxLen - TRIM_WITH.length))
-}
-export function trim_end(_str: string, _maxLen: number): string {
-  /*
-    Shorten string from the end if it exceeds `maxLen`
- */
-  if (_maxLen <= TRIM_WITH.length)
-    throw new TrimErr(`trim_end _maxLen too short: ${_maxLen}`)
-  if (_str.length <= _maxLen)
-    return _str
-  return _str.slice(0, _maxLen - TRIM_WITH.length) + TRIM_WITH
-}
-
-
-
 export function time_to_str(): string {
   /*
     Returns HH:MM:SS-DD:MM:YYYY
@@ -263,4 +238,59 @@ export function roll_dice(_min: number, _max: number): number {
   if (_min > _max)
     [_min, _max] = [_max, _min]
   return Math.floor(Math.random() * (_max - _min)) + _min
+}
+
+
+
+export class TrimErr extends AnyErr {}
+export function trim_begin(_str: string, _maxLen: number, _trimWith = "..."): string {
+  /*
+    Shorten string from the beginning if it exceeds `_maxLen`
+  */
+  if (_maxLen <= _trimWith.length)
+    throw new TrimErr(`trim_begin _maxLen too short: ${_maxLen}`)
+  if (_str.length <= _maxLen)
+    return _str
+  return _trimWith + _str.slice(_str.length - (_maxLen - _trimWith.length))
+}
+export function trim_end(_str: string, _maxLen: number, _trimWith = "..."): string {
+  /*
+    Shorten string from the end if it exceeds `maxLen`
+ */
+  if (_maxLen <= _trimWith.length)
+    throw new TrimErr(`trim_end _maxLen too short: ${_maxLen}`)
+  if (_str.length <= _maxLen)
+    return _str
+  return _str.slice(0, _maxLen - _trimWith.length) + _trimWith
+}
+
+
+
+export class Benchmark {
+  /*
+    Measures the time taken by a function or a block of code.
+    Example:
+      const b = new Benchmark()
+      // Do something
+      console.log(`Time taken: ${b.elapsed_ms()}ms`)
+  */
+  startTime: number
+  
+  constructor() {
+    this.startTime = performance.now()
+  }
+
+  reset(): void {
+    this.startTime = performance.now()
+  }
+
+  elapsed_ms(): number {
+    return performance.now() - this.startTime
+  }
+}
+
+
+
+export function betweem(_val: number, _min: number, _max: number): boolean {
+  return _val >= _min && _val <= _max
 }

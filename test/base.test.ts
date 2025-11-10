@@ -1906,569 +1906,6 @@ vt.describe("or_err function", () => {
 
 
 
-vt.describe("TRIM_WITH constant", () => {
-  vt.it("is defined", () => {
-    vt.expect(bs.TRIM_WITH).toBeDefined()
-  })
-
-  vt.it("is a string", () => {
-    vt.expect(typeof bs.TRIM_WITH).toBe("string")
-  })
-
-  vt.it("equals three dots", () => {
-    vt.expect(bs.TRIM_WITH).toBe("...")
-  })
-
-  vt.it("has length of 3", () => {
-    vt.expect(bs.TRIM_WITH.length).toBe(3)
-  })
-})
-
-vt.describe("TrimErr class", () => {
-  vt.it("is a subclass of AnyErr", () => {
-    const err = new bs.TrimErr("test")
-    vt.expect(err).toBeInstanceOf(bs.TrimErr)
-    vt.expect(err).toBeInstanceOf(bs.AnyErr)
-    vt.expect(err).toBeInstanceOf(Error)
-  })
-
-  vt.it("formats message correctly", () => {
-    const err = new bs.TrimErr("trim failed")
-    vt.expect(err.message).toContain("TrimErr")
-    vt.expect(err.message).toContain("trim failed")
-  })
-})
-
-vt.describe("trim_begin function", () => {
-  
-  vt.describe("basic functionality", () => {
-    vt.it("trims long string from beginning", () => {
-      const result = bs.trim_begin("hello world", 8)
-      vt.expect(result).toBe("...world")
-    })
-
-    vt.it("adds ellipsis to beginning when trimmed", () => {
-      const result = bs.trim_begin("abcdefghij", 7)
-      vt.expect(result.startsWith(bs.TRIM_WITH)).toBe(true)
-    })
-
-    vt.it("preserves end of string", () => {
-      const result = bs.trim_begin("start middle end", 10)
-      vt.expect(result.endsWith("end")).toBe(true)
-    })
-
-    vt.it("result length equals maxLen when trimmed", () => {
-      const result = bs.trim_begin("this is a very long string", 10)
-      vt.expect(result.length).toBe(10)
-    })
-
-    vt.it("returns original string if under maxLen", () => {
-      const original = "short"
-      const result = bs.trim_begin(original, 10)
-      vt.expect(result).toBe(original)
-    })
-
-    vt.it("returns original string if equal to maxLen", () => {
-      const original = "exactly"
-      const result = bs.trim_begin(original, 7)
-      vt.expect(result).toBe(original)
-    })
-  })
-
-  vt.describe("exact boundary cases", () => {
-    vt.it("maxLen = string length (no trim needed)", () => {
-      vt.expect(bs.trim_begin("hello", 5)).toBe("hello")
-    })
-
-    vt.it("maxLen = string length + 1 (no trim needed)", () => {
-      vt.expect(bs.trim_begin("hello", 6)).toBe("hello")
-    })
-
-    vt.it("maxLen = string length - 1 (trim by 1)", () => {
-      const result = bs.trim_begin("hello", 4)
-      vt.expect(result.length).toBe(4)
-      vt.expect(result.startsWith(bs.TRIM_WITH)).toBe(true)
-    })
-
-    vt.it("maxLen = TRIM_WITH.length + 1 (minimum valid)", () => {
-      const result = bs.trim_begin("hello world", 4)
-      vt.expect(result.length).toBe(4)
-      vt.expect(result).toBe("...d")
-    })
-
-    vt.it("trims to exactly maxLen characters", () => {
-      const lengths = [5, 10, 15, 20, 25]
-      lengths.forEach(len => {
-        const result = bs.trim_begin("a".repeat(100), len)
-        vt.expect(result.length).toBe(len)
-      })
-    })
-  })
-
-  vt.describe("error cases - maxLen too short", () => {
-    vt.it("throws when maxLen equals TRIM_WITH.length", () => {
-      vt.expect(() => bs.trim_begin("hello", 3)).toThrow(bs.TrimErr)
-    })
-
-    vt.it("throws when maxLen is less than TRIM_WITH.length", () => {
-      vt.expect(() => bs.trim_begin("hello", 2)).toThrow(bs.TrimErr)
-    })
-
-    vt.it("throws when maxLen is 1", () => {
-      vt.expect(() => bs.trim_begin("hello", 1)).toThrow(bs.TrimErr)
-    })
-
-    vt.it("throws when maxLen is 0", () => {
-      vt.expect(() => bs.trim_begin("hello", 0)).toThrow(bs.TrimErr)
-    })
-
-    vt.it("throws when maxLen is negative", () => {
-      vt.expect(() => bs.trim_begin("hello", -5)).toThrow(bs.TrimErr)
-    })
-
-    vt.it("error message includes maxLen value", () => {
-      try {
-        bs.trim_begin("test", 2)
-        vt.expect(true).toBe(false)
-      } catch (e: any) {
-        vt.expect(e.message).toContain("2")
-        vt.expect(e.message).toContain("too short")
-      }
-    })
-
-    vt.it("error message mentions trim_begin", () => {
-      try {
-        bs.trim_begin("test", 1)
-        vt.expect(true).toBe(false)
-      } catch (e: any) {
-        vt.expect(e.message).toContain("trim_begin")
-      }
-    })
-  })
-
-  vt.describe("edge cases - empty and short strings", () => {
-    vt.it("handles empty string", () => {
-      vt.expect(bs.trim_begin("", 10)).toBe("")
-    })
-
-    vt.it("handles single character string under limit", () => {
-      vt.expect(bs.trim_begin("a", 5)).toBe("a")
-    })
-
-    vt.it("handles string with only spaces", () => {
-      const result = bs.trim_begin("     ", 4)
-      vt.expect(result).toBe("... ")
-    })
-
-    vt.it("trims string with only spaces when needed", () => {
-      const result = bs.trim_begin("          ", 5)
-      vt.expect(result.length).toBe(5)
-      vt.expect(result.startsWith(bs.TRIM_WITH)).toBe(true)
-    })
-  })
-
-  vt.describe("special characters", () => {
-    vt.it("handles unicode characters", () => {
-      const result = bs.trim_begin("🔥💯🚀✨⭐", 4)
-      vt.expect(result.length).toBe(4)
-      vt.expect(result.startsWith(bs.TRIM_WITH)).toBe(true)
-    })
-
-    vt.it("handles newlines", () => {
-      const result = bs.trim_begin("line1\nline2\nline3", 10)
-      vt.expect(result.length).toBe(10)
-    })
-
-    vt.it("handles tabs", () => {
-      const result = bs.trim_begin("col1\tcol2\tcol3", 8)
-      vt.expect(result.length).toBe(8)
-    })
-
-    vt.it("handles mixed special characters", () => {
-      const str = "hello\nworld\t🔥"
-      const result = bs.trim_begin(str, 8)
-      vt.expect(result.length).toBe(8)
-    })
-
-    vt.it("preserves emoji at end", () => {
-      const result = bs.trim_begin("start middle 🔥", 8)
-      vt.expect(result.endsWith("🔥")).toBe(true)
-    })
-  })
-
-  vt.describe("long strings", () => {
-    vt.it("handles very long string", () => {
-      const longStr = "a".repeat(10000)
-      const result = bs.trim_begin(longStr, 10)
-      vt.expect(result.length).toBe(10)
-      vt.expect(result).toBe("...aaaaaaa")
-    })
-
-    vt.it("trims large amount of text", () => {
-      const longStr = "x".repeat(1000)
-      const result = bs.trim_begin(longStr, 20)
-      vt.expect(result.length).toBe(20)
-      vt.expect(result.startsWith(bs.TRIM_WITH)).toBe(true)
-    })
-
-    vt.it("preserves correct end portion", () => {
-      const str = "a".repeat(100) + "END"
-      const result = bs.trim_begin(str, 10)
-      vt.expect(result.endsWith("END")).toBe(true)
-    })
-  })
-
-  vt.describe("return value validation", () => {
-    vt.it("always returns a string", () => {
-      vt.expect(typeof bs.trim_begin("test", 10)).toBe("string")
-      vt.expect(typeof bs.trim_begin("test", 4)).toBe("string")
-    })
-
-    vt.it("never returns empty string for non-empty input", () => {
-      const result = bs.trim_begin("hello", 4)
-      vt.expect(result.length).toBeGreaterThan(0)
-    })
-
-    vt.it("trimmed string is never longer than maxLen", () => {
-      const testCases = [
-        ["hello world", 5],
-        ["a".repeat(100), 20],
-        ["test string", 8]
-      ]
-      testCases.forEach(([str, maxLen]) => {
-        const result = bs.trim_begin(str as string, maxLen as number)
-        vt.expect(result.length).toBeLessThanOrEqual(maxLen as number)
-      })
-    })
-  })
-
-  vt.describe("mathematical correctness", () => {
-    vt.it("keeps (maxLen - 3) characters from end", () => {
-      const str = "0123456789"
-      const result = bs.trim_begin(str, 7)
-      // Should keep 7 - 3 = 4 chars from end: "6789"
-      vt.expect(result).toBe("...6789")
-    })
-
-    vt.it("calculates slice position correctly", () => {
-      const str = "abcdefghijklmnop"
-      const maxLen = 10
-      const result = bs.trim_begin(str, maxLen)
-      // str.length = 16, maxLen = 10, keep = 7
-      // slice from position 16 - 7 = 9
-      vt.expect(result).toBe("...jklmnop")
-    })
-  })
-})
-
-vt.describe("trim_end function", () => {
-  
-  vt.describe("basic functionality", () => {
-    vt.it("trims long string from end", () => {
-      const result = bs.trim_end("hello world", 8)
-      vt.expect(result).toBe("hello...")
-    })
-
-    vt.it("adds ellipsis to end when trimmed", () => {
-      const result = bs.trim_end("abcdefghij", 7)
-      vt.expect(result.endsWith(bs.TRIM_WITH)).toBe(true)
-    })
-
-    vt.it("preserves beginning of string", () => {
-      const result = bs.trim_end("start middle end", 10)
-      vt.expect(result.startsWith("start")).toBe(true)
-    })
-
-    vt.it("result length equals maxLen when trimmed", () => {
-      const result = bs.trim_end("this is a very long string", 10)
-      vt.expect(result.length).toBe(10)
-    })
-
-    vt.it("returns original string if under maxLen", () => {
-      const original = "short"
-      const result = bs.trim_end(original, 10)
-      vt.expect(result).toBe(original)
-    })
-
-    vt.it("returns original string if equal to maxLen", () => {
-      const original = "exactly"
-      const result = bs.trim_end(original, 7)
-      vt.expect(result).toBe(original)
-    })
-  })
-
-  vt.describe("exact boundary cases", () => {
-    vt.it("maxLen = string length (no trim needed)", () => {
-      vt.expect(bs.trim_end("hello", 5)).toBe("hello")
-    })
-
-    vt.it("maxLen = string length + 1 (no trim needed)", () => {
-      vt.expect(bs.trim_end("hello", 6)).toBe("hello")
-    })
-
-    vt.it("maxLen = string length - 1 (trim by 1)", () => {
-      const result = bs.trim_end("hello", 4)
-      vt.expect(result.length).toBe(4)
-      vt.expect(result.endsWith(bs.TRIM_WITH)).toBe(true)
-    })
-
-    vt.it("maxLen = TRIM_WITH.length + 1 (minimum valid)", () => {
-      const result = bs.trim_end("hello world", 4)
-      vt.expect(result.length).toBe(4)
-      vt.expect(result).toBe("h...")
-    })
-
-    vt.it("trims to exactly maxLen characters", () => {
-      const lengths = [5, 10, 15, 20, 25]
-      lengths.forEach(len => {
-        const result = bs.trim_end("a".repeat(100), len)
-        vt.expect(result.length).toBe(len)
-      })
-    })
-  })
-
-  vt.describe("error cases - maxLen too short", () => {
-    vt.it("throws when maxLen equals TRIM_WITH.length", () => {
-      vt.expect(() => bs.trim_end("hello", 3)).toThrow(bs.TrimErr)
-    })
-
-    vt.it("throws when maxLen is less than TRIM_WITH.length", () => {
-      vt.expect(() => bs.trim_end("hello", 2)).toThrow(bs.TrimErr)
-    })
-
-    vt.it("throws when maxLen is 1", () => {
-      vt.expect(() => bs.trim_end("hello", 1)).toThrow(bs.TrimErr)
-    })
-
-    vt.it("throws when maxLen is 0", () => {
-      vt.expect(() => bs.trim_end("hello", 0)).toThrow(bs.TrimErr)
-    })
-
-    vt.it("throws when maxLen is negative", () => {
-      vt.expect(() => bs.trim_end("hello", -5)).toThrow(bs.TrimErr)
-    })
-
-    vt.it("error message includes maxLen value", () => {
-      try {
-        bs.trim_end("test", 2)
-        vt.expect(true).toBe(false)
-      } catch (e: any) {
-        vt.expect(e.message).toContain("2")
-        vt.expect(e.message).toContain("too short")
-      }
-    })
-
-    vt.it("error message mentions trim_end", () => {
-      try {
-        bs.trim_end("test", 1)
-        vt.expect(true).toBe(false)
-      } catch (e: any) {
-        vt.expect(e.message).toContain("trim_end")
-      }
-    })
-  })
-
-  vt.describe("edge cases - empty and short strings", () => {
-    vt.it("handles empty string", () => {
-      vt.expect(bs.trim_end("", 10)).toBe("")
-    })
-
-    vt.it("handles single character string under limit", () => {
-      vt.expect(bs.trim_end("a", 5)).toBe("a")
-    })
-
-    vt.it("handles string with only spaces", () => {
-      const result = bs.trim_end("     ", 4)
-      vt.expect(result).toBe(" ...")
-    })
-
-    vt.it("trims string with only spaces when needed", () => {
-      const result = bs.trim_end("          ", 5)
-      vt.expect(result.length).toBe(5)
-      vt.expect(result.endsWith(bs.TRIM_WITH)).toBe(true)
-    })
-  })
-
-  vt.describe("special characters", () => {
-    vt.it("handles unicode characters", () => {
-      const result = bs.trim_end("🔥💯🚀✨⭐", 4)
-      vt.expect(result.length).toBe(4)
-      vt.expect(result.endsWith(bs.TRIM_WITH)).toBe(true)
-    })
-
-    vt.it("handles newlines", () => {
-      const result = bs.trim_end("line1\nline2\nline3", 10)
-      vt.expect(result.length).toBe(10)
-    })
-
-    vt.it("handles tabs", () => {
-      const result = bs.trim_end("col1\tcol2\tcol3", 8)
-      vt.expect(result.length).toBe(8)
-    })
-
-    vt.it("handles mixed special characters", () => {
-      const str = "🔥\nhello\tworld"
-      const result = bs.trim_end(str, 8)
-      vt.expect(result.length).toBe(8)
-    })
-
-    vt.it("preserves emoji at start", () => {
-      const result = bs.trim_end("🔥 start middle", 8)
-      vt.expect(result.startsWith("🔥")).toBe(true)
-    })
-  })
-
-  vt.describe("long strings", () => {
-    vt.it("handles very long string", () => {
-      const longStr = "a".repeat(10000)
-      const result = bs.trim_end(longStr, 10)
-      vt.expect(result.length).toBe(10)
-      vt.expect(result).toBe("aaaaaaa...")
-    })
-
-    vt.it("trims large amount of text", () => {
-      const longStr = "x".repeat(1000)
-      const result = bs.trim_end(longStr, 20)
-      vt.expect(result.length).toBe(20)
-      vt.expect(result.endsWith(bs.TRIM_WITH)).toBe(true)
-    })
-
-    vt.it("preserves correct start portion", () => {
-      const str = "START" + "z".repeat(100)
-      const result = bs.trim_end(str, 10)
-      vt.expect(result.startsWith("START")).toBe(true)
-    })
-  })
-
-  vt.describe("return value validation", () => {
-    vt.it("always returns a string", () => {
-      vt.expect(typeof bs.trim_end("test", 10)).toBe("string")
-      vt.expect(typeof bs.trim_end("test", 4)).toBe("string")
-    })
-
-    vt.it("never returns empty string for non-empty input", () => {
-      const result = bs.trim_end("hello", 4)
-      vt.expect(result.length).toBeGreaterThan(0)
-    })
-
-    vt.it("trimmed string is never longer than maxLen", () => {
-      const testCases = [
-        ["hello world", 5],
-        ["a".repeat(100), 20],
-        ["test string", 8]
-      ]
-      testCases.forEach(([str, maxLen]) => {
-        const result = bs.trim_end(str as string, maxLen as number)
-        vt.expect(result.length).toBeLessThanOrEqual(maxLen as number)
-      })
-    })
-  })
-
-  vt.describe("mathematical correctness", () => {
-    vt.it("keeps (maxLen - 3) characters from start", () => {
-      const str = "0123456789"
-      const result = bs.trim_end(str, 7)
-      // Should keep 7 - 3 = 4 chars from start: "0123"
-      vt.expect(result).toBe("0123...")
-    })
-
-    vt.it("calculates slice position correctly", () => {
-      const str = "abcdefghijklmnop"
-      const maxLen = 10
-      const result = bs.trim_end(str, maxLen)
-      // maxLen = 10, keep = 7, slice(0, 7)
-      vt.expect(result).toBe("abcdefg...")
-    })
-  })
-})
-
-vt.describe("trim_begin and trim_end comparison", () => {
-  vt.it("both handle same string differently", () => {
-    const str = "hello world"
-    const begin = bs.trim_begin(str, 8)
-    const end = bs.trim_end(str, 8)
-    
-    vt.expect(begin).toBe("...world")
-    vt.expect(end).toBe("hello...")
-    vt.expect(begin).not.toBe(end)
-  })
-
-  vt.it("both throw on same invalid maxLen", () => {
-    vt.expect(() => bs.trim_begin("test", 2)).toThrow()
-    vt.expect(() => bs.trim_end("test", 2)).toThrow()
-  })
-
-  vt.it("both return original for short strings", () => {
-    const str = "short"
-    vt.expect(bs.trim_begin(str, 10)).toBe(str)
-    vt.expect(bs.trim_end(str, 10)).toBe(str)
-  })
-
-  vt.it("both produce same length output", () => {
-    const str = "a".repeat(100)
-    const maxLen = 20
-    vt.expect(bs.trim_begin(str, maxLen).length).toBe(maxLen)
-    vt.expect(bs.trim_end(str, maxLen).length).toBe(maxLen)
-  })
-
-  vt.it("ellipsis position differs", () => {
-    const str = "abcdefghij"
-    const begin = bs.trim_begin(str, 7)
-    const end = bs.trim_end(str, 7)
-    
-    vt.expect(begin.indexOf(bs.TRIM_WITH)).toBe(0)
-    vt.expect(end.lastIndexOf(bs.TRIM_WITH)).toBe(4)
-  })
-})
-
-vt.describe("practical use cases", () => {
-  vt.it("trim_end for displaying file paths", () => {
-    const path = "/very/long/path/to/some/file.txt"
-    const result = bs.trim_end(path, 20)
-    vt.expect(result.length).toBe(20)
-    vt.expect(result.startsWith("/very")).toBe(true)
-  })
-
-  vt.it("trim_begin for displaying log messages", () => {
-    const log = "ERROR: Connection failed after multiple retries"
-    const result = bs.trim_begin(log, 25)
-    vt.expect(result.endsWith("retries")).toBe(true)
-  })
-
-  vt.it("trim_end for truncating user input", () => {
-    const userInput = "This is a very long comment that needs to be shortened"
-    const result = bs.trim_end(userInput, 30)
-    vt.expect(result.length).toBe(30)
-  })
-
-  vt.it("trim_begin for showing context in search results", () => {
-    const text = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod"
-    const result = bs.trim_begin(text, 30)
-    vt.expect(result.length).toBe(30)
-    vt.expect(result.startsWith(bs.TRIM_WITH)).toBe(true)
-  })
-})
-
-vt.describe("error integration with LAST_ERROR", () => {
-  vt.it("trim_begin sets LAST_ERROR on throw", () => {
-    try {
-      bs.trim_begin("test", 1)
-    } catch (e) {
-      vt.expect(bs.LAST_ERROR).toBeInstanceOf(bs.TrimErr)
-    }
-  })
-
-  vt.it("trim_end sets LAST_ERROR on throw", () => {
-    try {
-      bs.trim_end("test", 0)
-    } catch (e) {
-      vt.expect(bs.LAST_ERROR).toBeInstanceOf(bs.TrimErr)
-    }
-  })
-})
-
-
-
 vt.describe("time_to_str function", () => {
   
   vt.it("returns a string", () => {
@@ -6470,3 +5907,570 @@ vt.describe("roll_dice function", () => {
     })
   })
 })
+
+
+
+
+
+
+// TODO
+// vt.describe("TRIM_WITH constant", () => {
+//   vt.it("is defined", () => {
+//     vt.expect(bs.TRIM_WITH).toBeDefined()
+//   })
+
+//   vt.it("is a string", () => {
+//     vt.expect(typeof bs.TRIM_WITH).toBe("string")
+//   })
+
+//   vt.it("equals three dots", () => {
+//     vt.expect(bs.TRIM_WITH).toBe("...")
+//   })
+
+//   vt.it("has length of 3", () => {
+//     vt.expect(bs.TRIM_WITH.length).toBe(3)
+//   })
+// })
+
+// vt.describe("TrimErr class", () => {
+//   vt.it("is a subclass of AnyErr", () => {
+//     const err = new bs.TrimErr("test")
+//     vt.expect(err).toBeInstanceOf(bs.TrimErr)
+//     vt.expect(err).toBeInstanceOf(bs.AnyErr)
+//     vt.expect(err).toBeInstanceOf(Error)
+//   })
+
+//   vt.it("formats message correctly", () => {
+//     const err = new bs.TrimErr("trim failed")
+//     vt.expect(err.message).toContain("TrimErr")
+//     vt.expect(err.message).toContain("trim failed")
+//   })
+// })
+
+// vt.describe("trim_begin function", () => {
+  
+//   vt.describe("basic functionality", () => {
+//     vt.it("trims long string from beginning", () => {
+//       const result = bs.trim_begin("hello world", 8)
+//       vt.expect(result).toBe("...world")
+//     })
+
+//     vt.it("adds ellipsis to beginning when trimmed", () => {
+//       const result = bs.trim_begin("abcdefghij", 7)
+//       vt.expect(result.startsWith(bs.TRIM_WITH)).toBe(true)
+//     })
+
+//     vt.it("preserves end of string", () => {
+//       const result = bs.trim_begin("start middle end", 10)
+//       vt.expect(result.endsWith("end")).toBe(true)
+//     })
+
+//     vt.it("result length equals maxLen when trimmed", () => {
+//       const result = bs.trim_begin("this is a very long string", 10)
+//       vt.expect(result.length).toBe(10)
+//     })
+
+//     vt.it("returns original string if under maxLen", () => {
+//       const original = "short"
+//       const result = bs.trim_begin(original, 10)
+//       vt.expect(result).toBe(original)
+//     })
+
+//     vt.it("returns original string if equal to maxLen", () => {
+//       const original = "exactly"
+//       const result = bs.trim_begin(original, 7)
+//       vt.expect(result).toBe(original)
+//     })
+//   })
+
+//   vt.describe("exact boundary cases", () => {
+//     vt.it("maxLen = string length (no trim needed)", () => {
+//       vt.expect(bs.trim_begin("hello", 5)).toBe("hello")
+//     })
+
+//     vt.it("maxLen = string length + 1 (no trim needed)", () => {
+//       vt.expect(bs.trim_begin("hello", 6)).toBe("hello")
+//     })
+
+//     vt.it("maxLen = string length - 1 (trim by 1)", () => {
+//       const result = bs.trim_begin("hello", 4)
+//       vt.expect(result.length).toBe(4)
+//       vt.expect(result.startsWith(bs.TRIM_WITH)).toBe(true)
+//     })
+
+//     vt.it("maxLen = TRIM_WITH.length + 1 (minimum valid)", () => {
+//       const result = bs.trim_begin("hello world", 4)
+//       vt.expect(result.length).toBe(4)
+//       vt.expect(result).toBe("...d")
+//     })
+
+//     vt.it("trims to exactly maxLen characters", () => {
+//       const lengths = [5, 10, 15, 20, 25]
+//       lengths.forEach(len => {
+//         const result = bs.trim_begin("a".repeat(100), len)
+//         vt.expect(result.length).toBe(len)
+//       })
+//     })
+//   })
+
+//   vt.describe("error cases - maxLen too short", () => {
+//     vt.it("throws when maxLen equals TRIM_WITH.length", () => {
+//       vt.expect(() => bs.trim_begin("hello", 3)).toThrow(bs.TrimErr)
+//     })
+
+//     vt.it("throws when maxLen is less than TRIM_WITH.length", () => {
+//       vt.expect(() => bs.trim_begin("hello", 2)).toThrow(bs.TrimErr)
+//     })
+
+//     vt.it("throws when maxLen is 1", () => {
+//       vt.expect(() => bs.trim_begin("hello", 1)).toThrow(bs.TrimErr)
+//     })
+
+//     vt.it("throws when maxLen is 0", () => {
+//       vt.expect(() => bs.trim_begin("hello", 0)).toThrow(bs.TrimErr)
+//     })
+
+//     vt.it("throws when maxLen is negative", () => {
+//       vt.expect(() => bs.trim_begin("hello", -5)).toThrow(bs.TrimErr)
+//     })
+
+//     vt.it("error message includes maxLen value", () => {
+//       try {
+//         bs.trim_begin("test", 2)
+//         vt.expect(true).toBe(false)
+//       } catch (e: any) {
+//         vt.expect(e.message).toContain("2")
+//         vt.expect(e.message).toContain("too short")
+//       }
+//     })
+
+//     vt.it("error message mentions trim_begin", () => {
+//       try {
+//         bs.trim_begin("test", 1)
+//         vt.expect(true).toBe(false)
+//       } catch (e: any) {
+//         vt.expect(e.message).toContain("trim_begin")
+//       }
+//     })
+//   })
+
+//   vt.describe("edge cases - empty and short strings", () => {
+//     vt.it("handles empty string", () => {
+//       vt.expect(bs.trim_begin("", 10)).toBe("")
+//     })
+
+//     vt.it("handles single character string under limit", () => {
+//       vt.expect(bs.trim_begin("a", 5)).toBe("a")
+//     })
+
+//     vt.it("handles string with only spaces", () => {
+//       const result = bs.trim_begin("     ", 4)
+//       vt.expect(result).toBe("... ")
+//     })
+
+//     vt.it("trims string with only spaces when needed", () => {
+//       const result = bs.trim_begin("          ", 5)
+//       vt.expect(result.length).toBe(5)
+//       vt.expect(result.startsWith(bs.TRIM_WITH)).toBe(true)
+//     })
+//   })
+
+//   vt.describe("special characters", () => {
+//     vt.it("handles unicode characters", () => {
+//       const result = bs.trim_begin("🔥💯🚀✨⭐", 4)
+//       vt.expect(result.length).toBe(4)
+//       vt.expect(result.startsWith(bs.TRIM_WITH)).toBe(true)
+//     })
+
+//     vt.it("handles newlines", () => {
+//       const result = bs.trim_begin("line1\nline2\nline3", 10)
+//       vt.expect(result.length).toBe(10)
+//     })
+
+//     vt.it("handles tabs", () => {
+//       const result = bs.trim_begin("col1\tcol2\tcol3", 8)
+//       vt.expect(result.length).toBe(8)
+//     })
+
+//     vt.it("handles mixed special characters", () => {
+//       const str = "hello\nworld\t🔥"
+//       const result = bs.trim_begin(str, 8)
+//       vt.expect(result.length).toBe(8)
+//     })
+
+//     vt.it("preserves emoji at end", () => {
+//       const result = bs.trim_begin("start middle 🔥", 8)
+//       vt.expect(result.endsWith("🔥")).toBe(true)
+//     })
+//   })
+
+//   vt.describe("long strings", () => {
+//     vt.it("handles very long string", () => {
+//       const longStr = "a".repeat(10000)
+//       const result = bs.trim_begin(longStr, 10)
+//       vt.expect(result.length).toBe(10)
+//       vt.expect(result).toBe("...aaaaaaa")
+//     })
+
+//     vt.it("trims large amount of text", () => {
+//       const longStr = "x".repeat(1000)
+//       const result = bs.trim_begin(longStr, 20)
+//       vt.expect(result.length).toBe(20)
+//       vt.expect(result.startsWith(bs.TRIM_WITH)).toBe(true)
+//     })
+
+//     vt.it("preserves correct end portion", () => {
+//       const str = "a".repeat(100) + "END"
+//       const result = bs.trim_begin(str, 10)
+//       vt.expect(result.endsWith("END")).toBe(true)
+//     })
+//   })
+
+//   vt.describe("return value validation", () => {
+//     vt.it("always returns a string", () => {
+//       vt.expect(typeof bs.trim_begin("test", 10)).toBe("string")
+//       vt.expect(typeof bs.trim_begin("test", 4)).toBe("string")
+//     })
+
+//     vt.it("never returns empty string for non-empty input", () => {
+//       const result = bs.trim_begin("hello", 4)
+//       vt.expect(result.length).toBeGreaterThan(0)
+//     })
+
+//     vt.it("trimmed string is never longer than maxLen", () => {
+//       const testCases = [
+//         ["hello world", 5],
+//         ["a".repeat(100), 20],
+//         ["test string", 8]
+//       ]
+//       testCases.forEach(([str, maxLen]) => {
+//         const result = bs.trim_begin(str as string, maxLen as number)
+//         vt.expect(result.length).toBeLessThanOrEqual(maxLen as number)
+//       })
+//     })
+//   })
+
+//   vt.describe("mathematical correctness", () => {
+//     vt.it("keeps (maxLen - 3) characters from end", () => {
+//       const str = "0123456789"
+//       const result = bs.trim_begin(str, 7)
+//       // Should keep 7 - 3 = 4 chars from end: "6789"
+//       vt.expect(result).toBe("...6789")
+//     })
+
+//     vt.it("calculates slice position correctly", () => {
+//       const str = "abcdefghijklmnop"
+//       const maxLen = 10
+//       const result = bs.trim_begin(str, maxLen)
+//       // str.length = 16, maxLen = 10, keep = 7
+//       // slice from position 16 - 7 = 9
+//       vt.expect(result).toBe("...jklmnop")
+//     })
+//   })
+// })
+
+// vt.describe("trim_end function", () => {
+  
+//   vt.describe("basic functionality", () => {
+//     vt.it("trims long string from end", () => {
+//       const result = bs.trim_end("hello world", 8)
+//       vt.expect(result).toBe("hello...")
+//     })
+
+//     vt.it("adds ellipsis to end when trimmed", () => {
+//       const result = bs.trim_end("abcdefghij", 7)
+//       vt.expect(result.endsWith(bs.TRIM_WITH)).toBe(true)
+//     })
+
+//     vt.it("preserves beginning of string", () => {
+//       const result = bs.trim_end("start middle end", 10)
+//       vt.expect(result.startsWith("start")).toBe(true)
+//     })
+
+//     vt.it("result length equals maxLen when trimmed", () => {
+//       const result = bs.trim_end("this is a very long string", 10)
+//       vt.expect(result.length).toBe(10)
+//     })
+
+//     vt.it("returns original string if under maxLen", () => {
+//       const original = "short"
+//       const result = bs.trim_end(original, 10)
+//       vt.expect(result).toBe(original)
+//     })
+
+//     vt.it("returns original string if equal to maxLen", () => {
+//       const original = "exactly"
+//       const result = bs.trim_end(original, 7)
+//       vt.expect(result).toBe(original)
+//     })
+//   })
+
+//   vt.describe("exact boundary cases", () => {
+//     vt.it("maxLen = string length (no trim needed)", () => {
+//       vt.expect(bs.trim_end("hello", 5)).toBe("hello")
+//     })
+
+//     vt.it("maxLen = string length + 1 (no trim needed)", () => {
+//       vt.expect(bs.trim_end("hello", 6)).toBe("hello")
+//     })
+
+//     vt.it("maxLen = string length - 1 (trim by 1)", () => {
+//       const result = bs.trim_end("hello", 4)
+//       vt.expect(result.length).toBe(4)
+//       vt.expect(result.endsWith(bs.TRIM_WITH)).toBe(true)
+//     })
+
+//     vt.it("maxLen = TRIM_WITH.length + 1 (minimum valid)", () => {
+//       const result = bs.trim_end("hello world", 4)
+//       vt.expect(result.length).toBe(4)
+//       vt.expect(result).toBe("h...")
+//     })
+
+//     vt.it("trims to exactly maxLen characters", () => {
+//       const lengths = [5, 10, 15, 20, 25]
+//       lengths.forEach(len => {
+//         const result = bs.trim_end("a".repeat(100), len)
+//         vt.expect(result.length).toBe(len)
+//       })
+//     })
+//   })
+
+//   vt.describe("error cases - maxLen too short", () => {
+//     vt.it("throws when maxLen equals TRIM_WITH.length", () => {
+//       vt.expect(() => bs.trim_end("hello", 3)).toThrow(bs.TrimErr)
+//     })
+
+//     vt.it("throws when maxLen is less than TRIM_WITH.length", () => {
+//       vt.expect(() => bs.trim_end("hello", 2)).toThrow(bs.TrimErr)
+//     })
+
+//     vt.it("throws when maxLen is 1", () => {
+//       vt.expect(() => bs.trim_end("hello", 1)).toThrow(bs.TrimErr)
+//     })
+
+//     vt.it("throws when maxLen is 0", () => {
+//       vt.expect(() => bs.trim_end("hello", 0)).toThrow(bs.TrimErr)
+//     })
+
+//     vt.it("throws when maxLen is negative", () => {
+//       vt.expect(() => bs.trim_end("hello", -5)).toThrow(bs.TrimErr)
+//     })
+
+//     vt.it("error message includes maxLen value", () => {
+//       try {
+//         bs.trim_end("test", 2)
+//         vt.expect(true).toBe(false)
+//       } catch (e: any) {
+//         vt.expect(e.message).toContain("2")
+//         vt.expect(e.message).toContain("too short")
+//       }
+//     })
+
+//     vt.it("error message mentions trim_end", () => {
+//       try {
+//         bs.trim_end("test", 1)
+//         vt.expect(true).toBe(false)
+//       } catch (e: any) {
+//         vt.expect(e.message).toContain("trim_end")
+//       }
+//     })
+//   })
+
+//   vt.describe("edge cases - empty and short strings", () => {
+//     vt.it("handles empty string", () => {
+//       vt.expect(bs.trim_end("", 10)).toBe("")
+//     })
+
+//     vt.it("handles single character string under limit", () => {
+//       vt.expect(bs.trim_end("a", 5)).toBe("a")
+//     })
+
+//     vt.it("handles string with only spaces", () => {
+//       const result = bs.trim_end("     ", 4)
+//       vt.expect(result).toBe(" ...")
+//     })
+
+//     vt.it("trims string with only spaces when needed", () => {
+//       const result = bs.trim_end("          ", 5)
+//       vt.expect(result.length).toBe(5)
+//       vt.expect(result.endsWith(bs.TRIM_WITH)).toBe(true)
+//     })
+//   })
+
+//   vt.describe("special characters", () => {
+//     vt.it("handles unicode characters", () => {
+//       const result = bs.trim_end("🔥💯🚀✨⭐", 4)
+//       vt.expect(result.length).toBe(4)
+//       vt.expect(result.endsWith(bs.TRIM_WITH)).toBe(true)
+//     })
+
+//     vt.it("handles newlines", () => {
+//       const result = bs.trim_end("line1\nline2\nline3", 10)
+//       vt.expect(result.length).toBe(10)
+//     })
+
+//     vt.it("handles tabs", () => {
+//       const result = bs.trim_end("col1\tcol2\tcol3", 8)
+//       vt.expect(result.length).toBe(8)
+//     })
+
+//     vt.it("handles mixed special characters", () => {
+//       const str = "🔥\nhello\tworld"
+//       const result = bs.trim_end(str, 8)
+//       vt.expect(result.length).toBe(8)
+//     })
+
+//     vt.it("preserves emoji at start", () => {
+//       const result = bs.trim_end("🔥 start middle", 8)
+//       vt.expect(result.startsWith("🔥")).toBe(true)
+//     })
+//   })
+
+//   vt.describe("long strings", () => {
+//     vt.it("handles very long string", () => {
+//       const longStr = "a".repeat(10000)
+//       const result = bs.trim_end(longStr, 10)
+//       vt.expect(result.length).toBe(10)
+//       vt.expect(result).toBe("aaaaaaa...")
+//     })
+
+//     vt.it("trims large amount of text", () => {
+//       const longStr = "x".repeat(1000)
+//       const result = bs.trim_end(longStr, 20)
+//       vt.expect(result.length).toBe(20)
+//       vt.expect(result.endsWith(bs.TRIM_WITH)).toBe(true)
+//     })
+
+//     vt.it("preserves correct start portion", () => {
+//       const str = "START" + "z".repeat(100)
+//       const result = bs.trim_end(str, 10)
+//       vt.expect(result.startsWith("START")).toBe(true)
+//     })
+//   })
+
+//   vt.describe("return value validation", () => {
+//     vt.it("always returns a string", () => {
+//       vt.expect(typeof bs.trim_end("test", 10)).toBe("string")
+//       vt.expect(typeof bs.trim_end("test", 4)).toBe("string")
+//     })
+
+//     vt.it("never returns empty string for non-empty input", () => {
+//       const result = bs.trim_end("hello", 4)
+//       vt.expect(result.length).toBeGreaterThan(0)
+//     })
+
+//     vt.it("trimmed string is never longer than maxLen", () => {
+//       const testCases = [
+//         ["hello world", 5],
+//         ["a".repeat(100), 20],
+//         ["test string", 8]
+//       ]
+//       testCases.forEach(([str, maxLen]) => {
+//         const result = bs.trim_end(str as string, maxLen as number)
+//         vt.expect(result.length).toBeLessThanOrEqual(maxLen as number)
+//       })
+//     })
+//   })
+
+//   vt.describe("mathematical correctness", () => {
+//     vt.it("keeps (maxLen - 3) characters from start", () => {
+//       const str = "0123456789"
+//       const result = bs.trim_end(str, 7)
+//       // Should keep 7 - 3 = 4 chars from start: "0123"
+//       vt.expect(result).toBe("0123...")
+//     })
+
+//     vt.it("calculates slice position correctly", () => {
+//       const str = "abcdefghijklmnop"
+//       const maxLen = 10
+//       const result = bs.trim_end(str, maxLen)
+//       // maxLen = 10, keep = 7, slice(0, 7)
+//       vt.expect(result).toBe("abcdefg...")
+//     })
+//   })
+// })
+
+// vt.describe("trim_begin and trim_end comparison", () => {
+//   vt.it("both handle same string differently", () => {
+//     const str = "hello world"
+//     const begin = bs.trim_begin(str, 8)
+//     const end = bs.trim_end(str, 8)
+    
+//     vt.expect(begin).toBe("...world")
+//     vt.expect(end).toBe("hello...")
+//     vt.expect(begin).not.toBe(end)
+//   })
+
+//   vt.it("both throw on same invalid maxLen", () => {
+//     vt.expect(() => bs.trim_begin("test", 2)).toThrow()
+//     vt.expect(() => bs.trim_end("test", 2)).toThrow()
+//   })
+
+//   vt.it("both return original for short strings", () => {
+//     const str = "short"
+//     vt.expect(bs.trim_begin(str, 10)).toBe(str)
+//     vt.expect(bs.trim_end(str, 10)).toBe(str)
+//   })
+
+//   vt.it("both produce same length output", () => {
+//     const str = "a".repeat(100)
+//     const maxLen = 20
+//     vt.expect(bs.trim_begin(str, maxLen).length).toBe(maxLen)
+//     vt.expect(bs.trim_end(str, maxLen).length).toBe(maxLen)
+//   })
+
+//   vt.it("ellipsis position differs", () => {
+//     const str = "abcdefghij"
+//     const begin = bs.trim_begin(str, 7)
+//     const end = bs.trim_end(str, 7)
+    
+//     vt.expect(begin.indexOf(bs.TRIM_WITH)).toBe(0)
+//     vt.expect(end.lastIndexOf(bs.TRIM_WITH)).toBe(4)
+//   })
+// })
+
+// vt.describe("practical use cases", () => {
+//   vt.it("trim_end for displaying file paths", () => {
+//     const path = "/very/long/path/to/some/file.txt"
+//     const result = bs.trim_end(path, 20)
+//     vt.expect(result.length).toBe(20)
+//     vt.expect(result.startsWith("/very")).toBe(true)
+//   })
+
+//   vt.it("trim_begin for displaying log messages", () => {
+//     const log = "ERROR: Connection failed after multiple retries"
+//     const result = bs.trim_begin(log, 25)
+//     vt.expect(result.endsWith("retries")).toBe(true)
+//   })
+
+//   vt.it("trim_end for truncating user input", () => {
+//     const userInput = "This is a very long comment that needs to be shortened"
+//     const result = bs.trim_end(userInput, 30)
+//     vt.expect(result.length).toBe(30)
+//   })
+
+//   vt.it("trim_begin for showing context in search results", () => {
+//     const text = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod"
+//     const result = bs.trim_begin(text, 30)
+//     vt.expect(result.length).toBe(30)
+//     vt.expect(result.startsWith(bs.TRIM_WITH)).toBe(true)
+//   })
+// })
+
+// vt.describe("error integration with LAST_ERROR", () => {
+//   vt.it("trim_begin sets LAST_ERROR on throw", () => {
+//     try {
+//       bs.trim_begin("test", 1)
+//     } catch (e) {
+//       vt.expect(bs.LAST_ERROR).toBeInstanceOf(bs.TrimErr)
+//     }
+//   })
+
+//   vt.it("trim_end sets LAST_ERROR on throw", () => {
+//     try {
+//       bs.trim_end("test", 0)
+//     } catch (e) {
+//       vt.expect(bs.LAST_ERROR).toBeInstanceOf(bs.TrimErr)
+//     }
+//   })
+// })
