@@ -1,13 +1,8 @@
-import { AnyErr, scramble_name } from "./base.js"
 import * as fs from "node:fs"
-import * as path from "node:path"
+import * as fp from "node:fs/promises"
+import * as ph from "node:path"
 import * as os from "node:os"
-import { spawnSync } from "node:child_process"
 
-
-
-
-export const IS_WINDOWS = process.platform === "win32" as const
 
 
 
@@ -20,7 +15,7 @@ export const enum RoadT {
   FIFO = "FIFO",
   SOCKET = "SOCKET"
 }
-export class RoadTErr extends AnyErr {} 
+
 export function to_RoadT(_pathorMode: string | number): RoadT {
   const mode = typeof _pathorMode === 'string' ? fs.lstatSync(_pathorMode).mode : _pathorMode
   switch (mode & fs.constants.S_IFMT) {
@@ -31,33 +26,40 @@ export function to_RoadT(_pathorMode: string | number): RoadT {
     case fs.constants.S_IFLNK: return RoadT.SYMLINK
     case fs.constants.S_IFIFO: return RoadT.FIFO
     case fs.constants.S_IFSOCK: return RoadT.SOCKET
-    default: throw new RoadTErr(`Unknown mode type ${mode} for path/mode: '${_pathorMode}'`)
+    default: throw new Error(`Unknown mode type ${mode} for path/mode: '${_pathorMode}'`)
   }
 }
 
-export class RoadErr extends AnyErr {
-  /*
-    Custom error class involving problematic attempts
-    to handle the underlying Road
-  */
-  readonly self: Road
-  constructor(_self: Road, _because: unknown) {
-    super(`At (path: '${_self.isAt}', type: ${_self.type()}) because: ${_because}`)
-    this.self = _self
+export function road_factory_sync(_lookFor: string): Road {
+  const roadType = to_RoadT(_lookFor)
+  switch (roadType) {
+    case RoadT.FILE: return new File(_lookFor)
+    case RoadT.FOLDER: return new Folder(_lookFor)
+    case RoadT.BLOCK_DEVICE: return new BlockDevice(_lookFor)
+    case RoadT.CHAR_DEVICE: return new CharacterDevice(_lookFor)
+    case RoadT.SYMLINK: return new SymbolicLink(_lookFor)
+    case RoadT.FIFO: return new Fifo(_lookFor)
+    case RoadT.SOCKET: return new Socket(_lookFor)
+    default: throw new Error(`UNREACHABLE (path: '${_lookFor}', type: '${roadType}')`)
+  }
+}
+export async function road_factory(_lookFor: string): Promise<Road> {
+  const roadType = to_RoadT(_lookFor)
+  switch (roadType) {
+    case RoadT.FILE: return new File(_lookFor)
+    case RoadT.FOLDER: return new Folder(_lookFor)
+    case RoadT.BLOCK_DEVICE: return new BlockDevice(_lookFor)
+    case RoadT.CHAR_DEVICE: return new CharacterDevice(_lookFor)
+    case RoadT.SYMLINK: return new SymbolicLink(_lookFor)
+    case RoadT.FIFO: return new Fifo(_lookFor)
+    case RoadT.SOCKET: return new Socket(_lookFor)
+    default: throw new Error(`UNREACHABLE (path: '${_lookFor}', type: '${roadType}')`)
   }
 }
 
-export function road_factory(_lookFor: string): Road {
-  const entryType = to_RoadT(_lookFor)
-  if (entryType === RoadT.FOLDER)
-    return new Folder(_lookFor)
-  else if (entryType === RoadT.FILE)
-    return new File(_lookFor)
-  else
-    return new BizarreRoad(_lookFor)
-}
 
 
+// Classes
 export abstract class Road {
   /*
     Abstract base class for filesystem entries.
@@ -72,293 +74,406 @@ export abstract class Road {
       File("/ex.txt") -> the actual file on disk
   */
   isAt: string
+  readonly type: RoadT
 
-
-  constructor(_lookFor: string) {
-    /*
-      Find and resolve the absolute path of _lookFor
-      with optional check to _shouldBeOfType
-    */
-    if (!fs.existsSync(_lookFor))
-      throw new RoadErr(this, "Not found")
-    this.isAt = path.resolve(_lookFor)
+  constructor(_path: string, _expectedType?: RoadT) {
+    this.isAt = ph.resolve(_path)
+    this.type = to_RoadT(this.isAt)
+    if (_expectedType && this.type !== _expectedType)
+      throw new Error(`Expected type ${_expectedType} but found ${this.type} at path '${this.isAt}'`)
   }
 
-
-  abstract exists(): boolean
-
-
-  type(): RoadT {
-    return to_RoadT(this.isAt)
+  // Query methods (async and sync)
+  underlying_type(): RoadT {
+    return this.type
+  }
+  exists_sync(): boolean {
+    return fs.existsSync(this.isAt) && to_RoadT(this.isAt) === this.type
+  }
+  async exists(): Promise<boolean> {
+    try {
+      await fp.access(this.isAt, fs.constants.F_OK)
+      return to_RoadT(this.isAt) === this.type
+    } catch {
+      return false
+    }
+  }
+  stats_sync(): fs.Stats {
+    return fs.lstatSync(this.isAt)
+  }
+  async stats(): Promise<fs.Stats> {
+    return await fp.lstat(this.isAt)
+  }
+  modified_sync(): Date {
+    return this.stats_sync().mtime
+  }
+  async modified(): Promise<Date> {
+    return (await this.stats()).mtime
+  }
+  created_sync(): Date {
+    return this.stats_sync().birthtime
+  }
+  async created(): Promise<Date> {
+    return (await this.stats()).birthtime
   }
 
-
+  // Path methods
   depth(): number {
-    return this.isAt.split(path.sep).length - 1
+    return this.isAt.split(ph.sep).length - 1
   }
-
-
-  name(): string {
-    return path.basename(this.isAt)
-  }
-
-
-  last_modified(): Date {
-    return fs.statSync(this.isAt).mtime
-  }
-  created_on(): Date {
-    return fs.statSync(this.isAt).birthtime
-  }
-
-
-  stats(): fs.Stats {
-    return fs.statSync(this.isAt)
-  }
-
-
-  cpy(_prevPath = this.isAt): this { // Maybe outdated
-    return new (this.constructor as any)(_prevPath) as this
-  }
-
-
   parent(): Folder {
-    return new Folder(path.dirname(this.isAt))
+    return new Folder(ph.dirname(this.isAt))
   }
-
-
-  parents(): Folder[] {
+  ancestors(): Folder[] {
     const result: Folder[] = []
-    let currentParent: Folder = this.parent()
-    while (currentParent.depth() > 1) {
-      result.unshift(currentParent)
-      currentParent = currentParent.parent()
+    let current: Folder = this.parent()
+    while (current.isAt !== current.parent().isAt) {
+      result.push(current)
+      current = current.parent()
     }
     return result
   }
-
-
-  rename_self_to(_newName: string): void {
-    if (_newName.includes(path.sep))
-      throw new RoadErr(this, `Invalid name: '${_newName}' is nested`)
-    const newPath = path.join(this.parent().isAt, _newName)
-    if (fs.existsSync(newPath))
-      throw new RoadErr(this, `New name: '${newPath}' already exists`)
-    fs.renameSync(this.isAt, newPath)
-    this.isAt = newPath
+  name(): string {
+    return ph.basename(this.isAt)
   }
 
-
-  move_self_into(_moveInto: Folder): void {
-    /*
-      Default attempt to move
-    */
-    const destPath = path.join(_moveInto.isAt, this.name())
-    if (fs.existsSync(destPath))
-      throw new RoadErr(this, `Destination: '${destPath}' already exists`)
-    fs.renameSync(this.isAt, destPath)
-    this.isAt = destPath
-  }
-
-
-  copy_self_into(_copyInto: Folder): this {
-    /*
-      Default attempt to copy
-    */
-    const destPath = path.join(_copyInto.isAt, this.name())
-    if (fs.existsSync(destPath))
-      throw new RoadErr(this, `Destination: '${destPath}' already exists`)
-    if (this.type() === RoadT.SYMLINK) {
-      const linkTarget = fs.readlinkSync(this.isAt)
-      fs.symlinkSync(linkTarget, destPath)
-    } else {
-      // Trying to use 'cp' for other special files (pipes, sockets, etc.)
-      const result = spawnSync("cp", ["-a", this.isAt, destPath])
-      if (result.status !== 0)
-        throw new RoadErr(this, `Failed to copy special file: ${result.stderr?.toString() || "unknown error"}`)
-    }
-    return this.cpy(destPath)
-  }
-
-
-  delete_self(): void {
-    /*
-      Default attempt to delete
-      Note:
-        Might not handle folders/files with special
-        types (pipes, sockets, etc.) properly idk why
-    */
-    if (!fs.existsSync(this.isAt))
-      return
-    fs.unlinkSync(this.isAt)
-  }
-}
-
-
-
-export class BizarreRoad extends Road {
-  /*
-    Specifically for files that don't fit into
-    the usual categories such as symbolic links
-    or pipes.
-  */
-  readonly originalType: RoadT // To remember own type
-
-
-  constructor(_lookFor: string) {
-    super(_lookFor)
-    this.originalType = this.type()
-    if (this.originalType === RoadT.FILE || this.originalType=== RoadT.FOLDER)
-      throw new RoadErr(this, `Type missmatch: ${this.originalType} is too normal (?), use other generalization of ${super.constructor.name} instead`)
-  }
-
-
-  override exists(): boolean {
-    return fs.existsSync(this.isAt) && this.type() === this.originalType
-  }
-}
-
-
-
-export class Folder extends Road {
-  /*
-    Handles folders in the file system
-  */
-  constructor(_lookFor: string, _createIfNotExists: boolean = false) {
-    if (_createIfNotExists && !fs.existsSync(_lookFor))
-      fs.mkdirSync(_lookFor, { recursive: true })
-    super(_lookFor)
-    if (!fs.existsSync(_lookFor) || this.type() !== RoadT.FOLDER)
-      throw new RoadErr(this, "Type missmatch: Should be folder")
-  }
-
-
-  list(): Array<Road> {
-    return fs.readdirSync(this.isAt).map(name => road_factory(path.join(this.isAt, name)))
-  }
-
-
-  find(_lookFor: string): Road | undefined {
-    /*
-      Check if the folder contains a file or folder with
-      the given relative path. If it does, return the
-      corresponding Road object.
-      Note:
-        Path MUST be relative
-    */
-    if (_lookFor.length === 0)
-      throw new RoadErr(this, "Invalid path: Empty path given to lookup")
-    if (_lookFor.includes("/") || _lookFor.includes("\\"))
-      throw new RoadErr(this, `Invalid path: Not relative or is nested: ${_lookFor}`)
-
-    if (!fs.existsSync(path.join(this.isAt, _lookFor)))
-      return undefined
-    else
-      return road_factory(path.join(this.isAt, _lookFor))
-  }
-
-
-  override copy_self_into(_copyInto: Folder, _options: fs.CopySyncOptions = { recursive: true }): this {
-    const newFolder = new Folder(path.join(_copyInto.isAt, this.name()))
-    fs.cpSync(this.isAt, newFolder.isAt, _options) // Merges
-    return newFolder as this
-  }
-
-
-  override exists(): boolean {
-    return fs.existsSync(this.isAt) && this.type() === RoadT.FOLDER
-  }
-
-
-  override delete_self(_options: fs.RmOptions = { recursive: true, force: true }): void {
-    if (!fs.existsSync(this.isAt))
-      return
-    fs.rmSync(this.isAt, _options)
-  }
+  // Positional methods (abstract)
+  abstract delete_sync(): void
+  abstract delete(): Promise<void>
+  abstract move_sync(_into: Folder): void
+  abstract move(_into: Folder): Promise<void>
+  abstract copy_sync(_into: Folder): this
+  abstract copy(_into: Folder): Promise<this>
+  abstract rename_sync(_to: string): void
+  abstract rename(_to: string): Promise<void>
 }
 
 
 
 export class File extends Road {
-  /*
-    Handles files in the file system
-  */
-  constructor(_lookFor: string, _createIfNotExists: boolean = false) {
-    if (_createIfNotExists && !fs.existsSync(_lookFor))
-      fs.writeFileSync(_lookFor, "")
-    super(_lookFor)
-    if (!fs.existsSync(_lookFor) || this.type() !== RoadT.FILE)
-      throw new RoadErr(this, "Type missmatch: Should be file")
+  constructor(_path: string) {
+    super(_path, RoadT.FILE)
   }
 
-
-  read_text(): string {
-    return fs.readFileSync(this.isAt, "utf-8")
+  // Creation
+  static create_sync(_path: string): File {
+    fs.writeFileSync(_path, "")
+    return new File(_path)
   }
-  edit_text(_newText: string): void {
-    fs.writeFileSync(this.isAt, _newText)
+  static async create(_path: string): Promise<File> {
+    await fp.writeFile(_path, "")
+    return new File(_path)
   }
 
+  // Content as text manipulation
+  read_text_sync(): string {
+    return fs.readFileSync(this.isAt, { encoding: "utf-8" })
+  }
+  async read_text(): Promise<string> {
+    return await fp.readFile(this.isAt, { encoding: "utf-8" })
+  }
+  write_text_sync(_content: string): void {
+    fs.writeFileSync(this.isAt, _content, { encoding: "utf-8" })
+  }
+  async write_text(_content: string): Promise<void> {
+    await fp.writeFile(this.isAt, _content, { encoding: "utf-8" })
+  }
+  append_text_sync(_content: string): void {
+    fs.appendFileSync(this.isAt, _content, { encoding: "utf-8" })
+  }
+  async append_text(_content: string): Promise<void> {
+    await fp.appendFile(this.isAt, _content, { encoding: "utf-8" })
+  }
 
-  read_binary(): Buffer {
+  // Content as binary manipulation
+  read_bytes_sync(): Buffer {
     return fs.readFileSync(this.isAt)
   }
-  edit_binary(_newBuffer: Buffer | Uint8Array): void {
-    fs.writeFileSync(this.isAt, _newBuffer)
+  async read_bytes(): Promise<Buffer> {
+    return await fp.readFile(this.isAt)
+  }
+  write_bytes_sync(_content: Buffer): void {
+    fs.writeFileSync(this.isAt, _content)
+  }
+  async write_bytes(_content: Buffer): Promise<void> {
+    await fp.writeFile(this.isAt, _content)
+  }
+  append_bytes_sync(_content: Buffer): void {
+    fs.appendFileSync(this.isAt, _content)
+  }
+  async append_bytes(_content: Buffer): Promise<void> {
+    await fp.appendFile(this.isAt, _content)
   }
 
+  // Streaming
+  create_read_stream(): fs.ReadStream {
+    return fs.createReadStream(this.isAt)
+  }
+  create_write_stream(): fs.WriteStream {
+    return fs.createWriteStream(this.isAt)
+  }
 
+  // Properties
   ext(): string {
-    return path.extname(this.isAt)
+    return ph.extname(this.isAt)
   }
-  size_in_bytes(): number {
-    return fs.statSync(this.isAt).size
+  size_sync(): number {
+    return this.stats_sync().size
+  }
+  async size(): Promise<number> {
+    return (await this.stats()).size
   }
 
-
-  override exists(): boolean {
-    return fs.existsSync(this.isAt) && this.type() === RoadT.FILE
+  // Implement abstract methods
+  delete_sync(): void {
+    fs.unlinkSync(this.isAt)
+  }
+  async delete(): Promise<void> {
+    await fp.unlink(this.isAt)
+  }
+  move_sync(_into: Folder): void {
+    const newPath = ph.join(_into.isAt, this.name())
+    fs.renameSync(this.isAt, newPath)
+    this.isAt = newPath
+  }
+  async move(_into: Folder): Promise<void> {
+    const newPath = ph.join(_into.isAt, this.name())
+    await fp.rename(this.isAt, newPath)
+    this.isAt = newPath
+  }
+  copy_sync(_into: Folder): this {
+    const newPath = ph.join(_into.isAt, this.name())
+    fs.copyFileSync(this.isAt, newPath)
+    return new File(newPath) as this
+  }
+  async copy(_into: Folder): Promise<this> {
+    const newPath = ph.join(_into.isAt, this.name())
+    await fp.copyFile(this.isAt, newPath)
+    return new File(newPath) as this
+  }
+  rename_sync(_to: string): void {
+    const newPath = ph.join(ph.dirname(this.isAt), _to)
+    fs.renameSync(this.isAt, newPath)
+    this.isAt = newPath
+  }
+  async rename(_to: string): Promise<void> {
+    const newPath = ph.join(ph.dirname(this.isAt), _to)
+    await fp.rename(this.isAt, newPath)
+    this.isAt = newPath
   }
 }
+
+
+
+
+export class Folder extends Road {
+  constructor(_path: string) {
+    super(_path, RoadT.FOLDER)
+  }
+
+  // Creation
+  static create_sync(_path: string): Folder {
+    fs.mkdirSync(_path, { recursive: true })
+    return new Folder(_path)
+  }
+  static async create(_path: string): Promise<Folder> {
+    await fp.mkdir(_path, { recursive: true })
+    return new Folder(_path)
+  }
+
+  // Listing
+  list_sync(_typeFilter?: RoadT): Road[] {
+    const entries = fs.readdirSync(this.isAt)
+    const roads: Road[] = entries.map(entry => road_factory_sync(ph.join(this.isAt, entry)))
+    if (_typeFilter)
+      return roads.filter(road => road.type === _typeFilter)
+    return roads
+  }
+  async list(_typeFilter?: RoadT): Promise<Road[]> {
+    const entries = await fp.readdir(this.isAt)
+    const roads: Road[] = await Promise.all(entries.map(async entry => road_factory(ph.join(this.isAt, entry))))
+    if (_typeFilter)
+      return roads.filter(road => road.type === _typeFilter)
+    return roads
+  }
+  find_sync(_name: string, _typeFilter?: RoadT): Road | null {
+    if (fs.existsSync(ph.join(this.isAt, _name))) {
+      const road = road_factory_sync(ph.join(this.isAt, _name))
+      if (_typeFilter && road.type !== _typeFilter)
+        return null
+      return road
+    }
+    return null
+  }
+  async find(_name: string, _typeFilter?: RoadT): Promise<Road | null> {
+    try {
+      await fp.access(ph.join(this.isAt, _name), fs.constants.F_OK)
+      const road = await road_factory(ph.join(this.isAt, _name))
+      if (_typeFilter && road.type !== _typeFilter)
+        return null
+      return road
+    } catch {
+      return null
+    }
+  }
+
+  // Implement abstract methods
+  delete_sync(): void {
+    fs.rmdirSync(this.isAt, { recursive: true })
+  }
+  async delete(): Promise<void> {
+    await fp.rmdir(this.isAt, { recursive: true })
+  }
+  move_sync(_into: Folder): void {
+    const newPath = ph.join(_into.isAt, this.name())
+    fs.renameSync(this.isAt, newPath)
+    this.isAt = newPath
+  }
+  async move(_into: Folder): Promise<void> {
+    const newPath = ph.join(_into.isAt, this.name())
+    await fp.rename(this.isAt, newPath)
+    this.isAt = newPath
+  }
+  copy_sync(_into: Folder): this {
+    const newPath = ph.join(_into.isAt, this.name())
+    fs.cpSync(this.isAt, newPath, { recursive: true })
+    return new Folder(newPath) as this
+  }
+  async copy(_into: Folder): Promise<this> {
+    const newPath = ph.join(_into.isAt, this.name())
+    await fp.cp(this.isAt, newPath, { recursive: true })
+    return new Folder(newPath) as this
+  }
+  rename_sync(_to: string): void {
+    const newPath = ph.join(ph.dirname(this.isAt), _to)
+    fs.renameSync(this.isAt, newPath)
+    this.isAt = newPath
+  }
+  async rename(_to: string): Promise<void> {
+    const newPath = ph.join(ph.dirname(this.isAt), _to)
+    await fp.rename(this.isAt, newPath)
+    this.isAt = newPath
+  }
+}
+
+
+
+export class SymbolicLink extends Road {
+  constructor(_path: string) {
+    super(_path, RoadT.SYMLINK)
+  }
+
+  // Creation
+  static create_sync(_createSelfAt: string, _target: Road): SymbolicLink {
+    fs.symlinkSync(_target.isAt, _createSelfAt)
+    return new SymbolicLink(_createSelfAt)
+  }
+  static async create(_createSelfAt: string, _target: Road): Promise<SymbolicLink> {
+    await fp.symlink(_target.isAt, _createSelfAt)
+    return new SymbolicLink(_createSelfAt)
+  }
+
+  // Target methods
+  target_sync(): Road {
+    return road_factory_sync(ph.resolve(ph.dirname(this.isAt), fs.readlinkSync(this.isAt)))
+  }
+  async target(): Promise<Road> {
+    const linkPath = await fp.readlink(this.isAt)
+    return road_factory(ph.resolve(ph.dirname(this.isAt), linkPath))
+  }
+  retarget_sync(_newTarget: Road): void {
+    this.delete_sync()
+    fs.symlinkSync(_newTarget.isAt, this.isAt)
+  }
+  async retarget(_newTarget: Road): Promise<void> {
+    await this.delete()
+    await fp.symlink(_newTarget.isAt, this.isAt)
+  }
+
+  // Implement abstract methods
+  delete_sync(): void {
+    fs.unlinkSync(this.isAt)
+  }
+  async delete(): Promise<void> {
+    await fp.unlink(this.isAt)
+  }
+  move_sync(_into: Folder): void {
+    const newPath = ph.join(_into.isAt, this.name())
+    fs.renameSync(this.isAt, newPath)
+    this.isAt = newPath
+  }
+  async move(_into: Folder): Promise<void> {
+    const newPath = ph.join(_into.isAt, this.name())
+    await fp.rename(this.isAt, newPath)
+    this.isAt = newPath
+  }
+  copy_sync(_into: Folder): this {
+    const newPath = ph.join(_into.isAt, this.name())
+    const target = this.target_sync()
+    fs.symlinkSync(target.isAt, newPath)
+    return new SymbolicLink(newPath) as this
+  }
+  async copy(_into: Folder): Promise<this> {
+    const newPath = ph.join(_into.isAt, this.name())
+    const target = await this.target()
+    await fp.symlink(target.isAt, newPath)
+    return new SymbolicLink(newPath) as this
+  }
+  rename_sync(_to: string): void {
+    const newPath = ph.join(ph.dirname(this.isAt), _to)
+    fs.renameSync(this.isAt, newPath)
+    this.isAt = newPath
+  }
+  async rename(_to: string): Promise<void> {
+    const newPath = ph.join(ph.dirname(this.isAt), _to)
+    await fp.rename(this.isAt, newPath)
+    this.isAt = newPath
+  }
+}
+
+
+
+export abstract class UnusuableRoad extends Road {
+  /*
+    Abstract base class for unusable filesystem entries.
+    These are special files that cannot be manipulated
+    like regular files or folders.
+  */
+  constructor(_path: string, _expectedType: RoadT) { super(_path, _expectedType) }
+  delete_sync(): void { throw new Error(`Cannot delete type ${this.type} at '${this.isAt}'`) }
+  async delete(): Promise<void> { throw new Error(`Cannot delete type ${this.type} at '${this.isAt}'`) }
+  move_sync(_into: Folder): void { throw new Error(`Cannot move type ${this.type} at '${this.isAt}'`) }
+  async move(_into: Folder): Promise<void> { throw new Error(`Cannot move type ${this.type} at '${this.isAt}'`) }
+  copy_sync(_into: Folder): this { throw new Error(`Cannot copy type ${this.type} at '${this.isAt}'`) }
+  async copy(_into: Folder): Promise<this> { throw new Error(`Cannot copy type ${this.type} at '${this.isAt}'`) }
+  rename_sync(_to: string): void { throw new Error(`Cannot rename type ${this.type} at '${this.isAt}'`) }
+  async rename(_to: string): Promise<void> { throw new Error(`Cannot rename type ${this.type} at '${this.isAt}'`) }
+}
+export class BlockDevice extends UnusuableRoad { constructor(_path: string) { super(_path, RoadT.BLOCK_DEVICE) }}
+export class CharacterDevice extends UnusuableRoad { constructor(_path: string) { super(_path, RoadT.CHAR_DEVICE) }}
+export class Fifo extends UnusuableRoad { constructor(_path: string) { super(_path, RoadT.FIFO) }}
+export class Socket extends UnusuableRoad { constructor(_path: string) { super(_path, RoadT.SOCKET) }}
 
 
 
 export class TempFile extends File {
-  /*
-    Create a temporary file with a random name in the system's
-    temporary directory.
-  */
   constructor() {
-    let tempName: string = `TempFile_${scramble_name()}.tmp`
-    while (fs.existsSync(path.join(os.tmpdir(), tempName)) && to_RoadT(path.join(os.tmpdir(), tempName)) !== RoadT.FILE) // Loops over forever until open name is found
-      tempName = `TempFile_${scramble_name()}.tmp`
-    super(path.join(os.tmpdir(), tempName), true)
+    super(ph.join(os.tmpdir(), `tempfile_${Date.now()}_${crypto.randomUUID()}.tmp`))
+    fs.writeFileSync(this.isAt, "")
   }
 
-
   [Symbol.dispose](): void {
-    this.delete_self()
+    try { this.delete_sync() } catch {}
   }
 }
 
 
-
 export class TempFolder extends Folder {
-  /*
-    Create a temporary folder with a random name in the system's
-    temporary directory.
-    Note:
-      Destructor also takes all entries in the folder
-      into account and deletes them ALL
-  */
   constructor() {
-    let tempName: string = `TempFolder_${scramble_name()}`
-    while (fs.existsSync(path.join(os.tmpdir(), tempName)) && to_RoadT(path.join(os.tmpdir(), tempName)) !== RoadT.FOLDER)
-      tempName = `TempFolder_${scramble_name()}`
-    super(path.join(os.tmpdir(), tempName), true)
+    super(ph.join(os.tmpdir(), `tempfolder_${Date.now()}_${crypto.randomUUID()}`))
+    fs.mkdirSync(this.isAt, { recursive: true })
   }
-
-
   [Symbol.dispose](): void {
-    this.delete_self()
+    try { this.delete_sync() } catch {}
   }
 }

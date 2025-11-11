@@ -1,22 +1,7 @@
-import { AnyErr } from "./base.js"
 
 
 
-export function rm_fileprotocol_from_src(_rawPath: string): string {
-  return _rawPath.replace(/^file:\/\/\//, "");
-}
-
-
-
-export class DOMErr extends AnyErr {
-  constructor(_identifier: string, _msg: string) {
-    super(`At state '${document.readyState}' from type, class or id '${_identifier}' because: ${_msg}`)
-  }
-}
-
-
-
-export function ready(): Promise<void> {
+export async function once_ready(): Promise<void> {
   return new Promise((resolve) => {
   if (document.readyState === 'loading')
     document.addEventListener('DOMContentLoaded', () => resolve())
@@ -32,7 +17,7 @@ export function by_id<T extends HTMLElement>(_id: string, _elementType?: new () 
   const element = document.getElementById(_id)
   const typeCtor = _elementType ?? HTMLElement
   if (!(element instanceof typeCtor))
-    throw new DOMErr(_id, `Type missmatch: Element is not of type ${typeCtor.name} but ${element?.constructor.name}`)
+    throw new Error(`Type missmatch: Element with id '${_id}' is not of type ${typeCtor.name}`)
   return element as T
 }
 
@@ -46,7 +31,7 @@ export function by_class<T extends HTMLElement>(_className: string, _elementType
 
   elements.forEach((element, index) => {
     if (!(element instanceof typeCtor))
-    throw new DOMErr(_className, `Type missmatch at index ${index}: Element is not of type ${typeCtor.name}`)
+    throw new Error(`Type missmatch: Element at index ${index} with class '${_className}' is not of type ${typeCtor.name}`)
     result.push(element as T)
   })
 
@@ -60,10 +45,15 @@ export function by_tag<K extends keyof HTMLElementTagNameMap>(_tagName: K): HTML
 
 
 
-export function id_exists<T extends HTMLElement>(_id: string, _elementType?: new() => T): boolean {
-  const typeCtor = _elementType ?? HTMLElement
-  const maybeElement = document.getElementById(_id)
-  if (!maybeElement || !(maybeElement instanceof typeCtor))
-    return false
-  return true
+export function create_element<K extends keyof HTMLElementTagNameMap>(_tagName: K): HTMLElementTagNameMap[K] {
+  return document.createElement(_tagName)
+}
+
+
+export function delete_element_by_id(_id: string): void {
+  const element = document.getElementById(_id)
+  if (element)
+    element.remove()
+  else
+    throw new Error(`Element with id '${_id}' not found`)
 }
