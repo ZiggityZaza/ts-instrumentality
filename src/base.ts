@@ -8,14 +8,11 @@ export function range(_from: number, _to?: number, _step: number = 1): Array<num
     throw new Error("can't handle NaN as value")
   if (!Number.isFinite(_from) || !Number.isFinite(_to) || !Number.isFinite(_step))
     throw new Error("can't handle infite as value")
-  let result: Array<number> = []
   if (_from < _to)
-    for (let i = _from; i < _to; i += _step)
-      result.push(i)
+    return Array.from({length: Math.ceil((_to - _from) / _step)}, (_, i) => _from + i * _step)
   else if (_from > _to)
-    for (let i = _from; i > _to; i -= _step)
-      result.push(i)
-  return result
+    return Array.from({length: Math.ceil((_from - _to) / _step)}, (_, i) => _from - i * _step)
+  return []
 }
 
 

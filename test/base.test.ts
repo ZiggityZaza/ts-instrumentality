@@ -61,13 +61,14 @@ describe('range()', () => {
     })
 
     it('should handle float step', () => {
-      expect(range(0, 1, 0.1)).toHaveLength(11)
+      expect(range(0, 1, 0.1)).toHaveLength(10)
     })
 
     it('should handle float step - checking actual values', () => {
       const result = range(0, 1, 0.2)
-      // This will likely fail due to floating point precision
-      expect(result).toEqual([0, 0.2, 0.4, 0.6, 0.8])
+      // Compare rounded values to avoid floating point precision errors
+      const rounded = result.map(x => Math.round(x * 100) / 100)
+      expect(rounded).toEqual([0, 0.2, 0.4, 0.6, 0.8])
     })
 
     it('should handle very small float step', () => {
@@ -173,7 +174,7 @@ describe('range()', () => {
 
     it('should handle very small step creating many elements', () => {
       const result = range(0, 10, 0.01)
-      expect(result).toHaveLength(1001)
+      expect(result).toHaveLength(1000)
     })
 
     it('should handle tiny float step that causes precision issues', () => {

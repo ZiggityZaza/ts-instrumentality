@@ -282,34 +282,37 @@ export class Folder extends Road {
   }
 
   // Listing
-  list_sync(_typeFilter?: RoadT): Road[] {
+  list_sync<T extends Road>(ctor?: new (...args: unknown[]) => T): Road[] {
     const entries = fs.readdirSync(this.isAt)
-    const roads: Road[] = entries.map(entry => road_factory_sync(ph.join(this.isAt, entry)))
-    if (_typeFilter)
-      return roads.filter(road => road.type === _typeFilter)
-    return roads
+    const allRoads = entries.map(entry => road_factory_sync(ph.join(this.isAt, entry)))
+    if (ctor)
+      return allRoads.filter(road => road instanceof ctor) as T[]
+    return allRoads
   }
-  async list(_typeFilter?: RoadT): Promise<Road[]> {
+  async list<T extends Road>(ctor?: new (...args: unknown[]) => T): Promise<Road[]> {
     const entries = await fp.readdir(this.isAt)
-    const roads: Road[] = await Promise.all(entries.map(async entry => road_factory(ph.join(this.isAt, entry))))
-    if (_typeFilter)
-      return roads.filter(road => road.type === _typeFilter)
-    return roads
+    const allRoadsPromises = entries.map(async entry => await road_factory(ph.join(this.isAt, entry)))
+    const allRoads = await Promise.all(allRoadsPromises)
+    if (ctor)
+      return allRoads.filter(road => road instanceof ctor) as T[]
+    return allRoads
   }
-  find_sync(_name: string, _typeFilter?: RoadT): Road | null {
-    if (fs.existsSync(ph.join(this.isAt, _name))) {
+  find_sync(_name: string, _ctor?: new (...args: unknown[]) => Road): Road | null {
+    try {
+      fs.accessSync(ph.join(this.isAt, _name), fs.constants.F_OK)
       const road = road_factory_sync(ph.join(this.isAt, _name))
-      if (_typeFilter && road.type !== _typeFilter)
+      if (_ctor && !(road instanceof _ctor))
         return null
       return road
+    } catch {
+      return null
     }
-    return null
   }
-  async find(_name: string, _typeFilter?: RoadT): Promise<Road | null> {
+  async find(_name: string, _ctor?: new (...args: unknown[]) => Road): Promise<Road | null> {
     try {
       await fp.access(ph.join(this.isAt, _name), fs.constants.F_OK)
       const road = await road_factory(ph.join(this.isAt, _name))
-      if (_typeFilter && road.type !== _typeFilter)
+      if (_ctor && !(road instanceof _ctor))
         return null
       return road
     } catch {
