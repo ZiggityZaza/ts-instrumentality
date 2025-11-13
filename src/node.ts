@@ -281,45 +281,70 @@ export class Folder extends Road {
     return new Folder(_path)
   }
 
-  // Listing
-  list_sync<T extends Road>(..._typeCtors: (new(...args: any[]) => T)[]): Road[] | T[] {
+  // list_sync overloads
+  list_sync(): Road[]
+  list_sync<T extends Road>(..._typeCtors: Array<new(...args: any[]) => T>): T[]
+  list_sync<T extends Road>(..._typeCtors: Array<new(...args: any[]) => T>): Road[] | T[] {
     const entries = fs.readdirSync(this.isAt).map(entry => road_factory_sync(ph.join(this.isAt, entry)))
     if (_typeCtors.length === 0)
       return entries
     return entries.filter(entry => _typeCtors.some(ctor => entry instanceof ctor)) as T[]
   }
-  async list<T extends Road>(..._typeCtors: (new(...args: any[]) => T)[]): Promise<Road[] | T[]> {
+
+  // list async overloads
+  async list(): Promise<Road[]>
+  async list<T extends Road>(..._typeCtors: Array<new(...args: any[]) => T>): Promise<T[]>
+  async list<T extends Road>(..._typeCtors: Array<new(...args: any[]) => T>): Promise<Road[] | T[]> {
     const entries = await Promise.all((await fp.readdir(this.isAt)).map(entry => road_factory(ph.join(this.isAt, entry))))
     if (_typeCtors.length === 0)
       return entries
     return entries.filter(entry => _typeCtors.some(ctor => entry instanceof ctor)) as T[]
   }
-  find_sync<T extends Road>(_name: string, ..._typeCtors: (new(...args: any[]) => T)[]): Road | T | null {
+
+  // find_sync overloads
+  find_sync(name: string): Road | null
+  find_sync<T extends Road>(name: string, ..._typeCtors: Array<new(...args: any[]) => T>): T | null
+  find_sync<T extends Road>(name: string, ..._typeCtors: Array<new(...args: any[]) => T>): Road | T | null {
     try {
-      fs.accessSync(ph.join(this.isAt, _name), fs.constants.F_OK)
-      const found = road_factory_sync(ph.join(this.isAt, _name))
-      if (_typeCtors.length === 0)
-        return found
-      if (_typeCtors.some(ctor => found instanceof ctor))
-        return found as T
-      return null
+      fs.accessSync(ph.join(this.isAt, name), fs.constants.F_OK);
+      const found = road_factory_sync(ph.join(this.isAt, name));
+      
+      if (_typeCtors.length === 0) {
+        return found;
+      }
+      
+      if (_typeCtors.some(ctor => found instanceof ctor)) {
+        return found as T;
+      }
+      
+      return null;
     } catch {
-      return null
+      return null;
     }
   }
-  async find<T extends Road>(_name: string, ..._typeCtors: (new(...args: any[]) => T)[]): Promise<Road | T | null> {
+
+  // find async overloads
+  async find(name: string): Promise<Road | null>;
+  async find<T extends Road>(name: string, ..._typeCtors: Array<new(...args: any[]) => T>): Promise<T | null>;
+  async find<T extends Road>(name: string, ..._typeCtors: Array<new(...args: any[]) => T>): Promise<Road | T | null> {
     try {
-      await fp.access(ph.join(this.isAt, _name), fs.constants.F_OK)
-      const found = await road_factory(ph.join(this.isAt, _name))
-      if (_typeCtors.length === 0)
-        return found
-      if (_typeCtors.some(ctor => found instanceof ctor))
-        return found as T
-      return null
+      await fp.access(ph.join(this.isAt, name), fs.constants.F_OK);
+      const found = await road_factory(ph.join(this.isAt, name));
+      
+      if (_typeCtors.length === 0) {
+        return found;
+      }
+      
+      if (_typeCtors.some(ctor => found instanceof ctor)) {
+        return found as T;
+      }
+      
+      return null;
     } catch {
-      return null
+      return null;
     }
   }
+
 
   // Implement abstract methods
   delete_sync(): void {
