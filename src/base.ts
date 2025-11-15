@@ -74,7 +74,5 @@ export async function retry<T, Args extends any[]>(_fn: (..._args: Args) => Prom
 
 export function sleep_sync(_ms: number): void {
   const end = Date.now() + _ms
-  while (Date.now() < end) {
-    // Busy-wait loop
-  }
+  while (Date.now() < end) {} // Busy-wait loop
 }

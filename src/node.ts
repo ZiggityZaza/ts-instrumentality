@@ -76,11 +76,28 @@ export abstract class Road {
   isAt: string
   readonly type: RoadT
 
-  constructor(_path: string, _expectedType?: RoadT) {
-    this.isAt = ph.resolve(_path)
+  constructor(_lookFor: string, _expectedType?: RoadT, _waitForExistence: boolean = true) {
+    if (_waitForExistence)
+      fs.accessSync(_lookFor, fs.constants.F_OK)
+    this.isAt = ph.resolve(_lookFor)
     this.type = to_RoadT(this.isAt)
     if (_expectedType && this.type !== _expectedType)
       throw new Error(`Expected type ${_expectedType} but found ${this.type} at path '${this.isAt}'`)
+  }
+  static make_async(_lookFor: string, _expectedType?: RoadT, _waitForExistence: boolean = true): Promise<Road> {
+    return new Promise<Road>(async (_resolve, _reject) => {
+      try {
+        if (_waitForExistence)
+          await fp.access(_lookFor, fs.constants.F_OK)
+        const resolvedPath = ph.resolve(_lookFor)
+        const roadType = to_RoadT(resolvedPath)
+        if (_expectedType && roadType !== _expectedType)
+          throw new Error(`Expected type ${_expectedType} but found ${roadType} at path '${resolvedPath}'`)
+        _resolve(road_factory_sync(resolvedPath))
+      } catch (_error) {
+        _reject(_error)
+      }
+    })
   }
 
   // Query methods (async and sync)
@@ -151,18 +168,10 @@ export abstract class Road {
 
 
 export class File extends Road {
-  constructor(_path: string) {
-    super(_path, RoadT.FILE)
-  }
-
-  // Creation
-  static create_sync(_path: string): File {
-    fs.writeFileSync(_path, "")
-    return new File(_path)
-  }
-  static async create(_path: string): Promise<File> {
-    await fp.writeFile(_path, "")
-    return new File(_path)
+  constructor(_lookFor: string, _createIfMissing: boolean = false) {
+    if (_createIfMissing && !fs.existsSync(_lookFor))
+      fs.writeFileSync(_lookFor, "")
+    super(_lookFor, RoadT.FILE)
   }
 
   // Content as text manipulation
@@ -267,18 +276,10 @@ export class File extends Road {
 
 
 export class Folder extends Road {
-  constructor(_path: string) {
-    super(_path, RoadT.FOLDER)
-  }
-
-  // Creation
-  static create_sync(_path: string): Folder {
-    fs.mkdirSync(_path, { recursive: true })
-    return new Folder(_path)
-  }
-  static async create(_path: string): Promise<Folder> {
-    await fp.mkdir(_path, { recursive: true })
-    return new Folder(_path)
+  constructor(_lookFor: string, _createIfMissing: boolean = false) {
+    if (_createIfMissing && !fs.existsSync(_lookFor))
+      fs.mkdirSync(_lookFor, { recursive: true })
+    super(_lookFor, RoadT.FOLDER)
   }
 
   // list_sync overloads
@@ -306,42 +307,32 @@ export class Folder extends Road {
   find_sync<T extends Road>(name: string, ..._typeCtors: Array<new(...args: any[]) => T>): T | null
   find_sync<T extends Road>(name: string, ..._typeCtors: Array<new(...args: any[]) => T>): Road | T | null {
     try {
-      fs.accessSync(ph.join(this.isAt, name), fs.constants.F_OK);
-      const found = road_factory_sync(ph.join(this.isAt, name));
-      
-      if (_typeCtors.length === 0) {
-        return found;
-      }
-      
-      if (_typeCtors.some(ctor => found instanceof ctor)) {
-        return found as T;
-      }
-      
-      return null;
+      fs.accessSync(ph.join(this.isAt, name), fs.constants.F_OK)
+      const found = road_factory_sync(ph.join(this.isAt, name))
+      if (_typeCtors.length === 0)
+        return found
+      if (_typeCtors.some(ctor => found instanceof ctor))
+        return found as T
+      return null
     } catch {
-      return null;
+      return null
     }
   }
 
   // find async overloads
-  async find(name: string): Promise<Road | null>;
-  async find<T extends Road>(name: string, ..._typeCtors: Array<new(...args: any[]) => T>): Promise<T | null>;
+  async find(name: string): Promise<Road | null>
+  async find<T extends Road>(name: string, ..._typeCtors: Array<new(...args: any[]) => T>): Promise<T | null>
   async find<T extends Road>(name: string, ..._typeCtors: Array<new(...args: any[]) => T>): Promise<Road | T | null> {
     try {
-      await fp.access(ph.join(this.isAt, name), fs.constants.F_OK);
-      const found = await road_factory(ph.join(this.isAt, name));
-      
-      if (_typeCtors.length === 0) {
-        return found;
-      }
-      
-      if (_typeCtors.some(ctor => found instanceof ctor)) {
-        return found as T;
-      }
-      
-      return null;
+      await fp.access(ph.join(this.isAt, name), fs.constants.F_OK)
+      const found = await road_factory(ph.join(this.isAt, name))
+      if (_typeCtors.length === 0)
+        return found
+      if (_typeCtors.some(ctor => found instanceof ctor))
+        return found as T
+      return null
     } catch {
-      return null;
+      return null
     }
   }
 
@@ -388,18 +379,10 @@ export class Folder extends Road {
 
 
 export class SymbolicLink extends Road {
-  constructor(_path: string) {
-    super(_path, RoadT.SYMLINK)
-  }
-
-  // Creation
-  static create_sync(_createSelfAt: string, _target: Road): SymbolicLink {
-    fs.symlinkSync(_target.isAt, _createSelfAt)
-    return new SymbolicLink(_createSelfAt)
-  }
-  static async create(_createSelfAt: string, _target: Road): Promise<SymbolicLink> {
-    await fp.symlink(_target.isAt, _createSelfAt)
-    return new SymbolicLink(_createSelfAt)
+  constructor(_lookFor: string, _createIfMissing: boolean = false) {
+    if (_createIfMissing && !fs.existsSync(_lookFor))
+      fs.symlinkSync("", _lookFor)
+    super(_lookFor, RoadT.SYMLINK)
   }
 
   // Target methods
@@ -468,7 +451,7 @@ export abstract class UnusuableRoad extends Road {
     These are special files that cannot be manipulated
     like regular files or folders.
   */
-  constructor(_path: string, _expectedType: RoadT) { super(_path, _expectedType) }
+  constructor(_lookFor: string, _expectedType: RoadT) { super(_lookFor, _expectedType) }
   delete_sync(): void { throw new Error(`Cannot delete type ${this.type} at '${this.isAt}'`) }
   async delete(): Promise<void> { throw new Error(`Cannot delete type ${this.type} at '${this.isAt}'`) }
   move_sync(_into: Folder): void { throw new Error(`Cannot move type ${this.type} at '${this.isAt}'`) }
@@ -478,17 +461,16 @@ export abstract class UnusuableRoad extends Road {
   rename_sync(_to: string): void { throw new Error(`Cannot rename type ${this.type} at '${this.isAt}'`) }
   async rename(_to: string): Promise<void> { throw new Error(`Cannot rename type ${this.type} at '${this.isAt}'`) }
 }
-export class BlockDevice extends UnusuableRoad { constructor(_path: string) { super(_path, RoadT.BLOCK_DEVICE) }}
-export class CharacterDevice extends UnusuableRoad { constructor(_path: string) { super(_path, RoadT.CHAR_DEVICE) }}
-export class Fifo extends UnusuableRoad { constructor(_path: string) { super(_path, RoadT.FIFO) }}
-export class Socket extends UnusuableRoad { constructor(_path: string) { super(_path, RoadT.SOCKET) }}
+export class BlockDevice extends UnusuableRoad { constructor(_lookFor: string) { super(_lookFor, RoadT.BLOCK_DEVICE) }}
+export class CharacterDevice extends UnusuableRoad { constructor(_lookFor: string) { super(_lookFor, RoadT.CHAR_DEVICE) }}
+export class Fifo extends UnusuableRoad { constructor(_lookFor: string) { super(_lookFor, RoadT.FIFO) }}
+export class Socket extends UnusuableRoad { constructor(_lookFor: string) { super(_lookFor, RoadT.SOCKET) }}
 
 
 
 export class TempFile extends File {
   constructor() {
-    super(ph.join(os.tmpdir(), `tempfile_${Date.now()}_${crypto.randomUUID()}.tmp`))
-    fs.writeFileSync(this.isAt, "")
+    super(ph.join(os.tmpdir(), `tempfile_${Date.now()}_${crypto.randomUUID()}.tmp`), true)
   }
 
   [Symbol.dispose](): void {
@@ -499,8 +481,7 @@ export class TempFile extends File {
 
 export class TempFolder extends Folder {
   constructor() {
-    super(ph.join(os.tmpdir(), `tempfolder_${Date.now()}_${crypto.randomUUID()}`))
-    fs.mkdirSync(this.isAt, { recursive: true })
+    super(ph.join(os.tmpdir(), `tempfolder_${Date.now()}_${crypto.randomUUID()}`), true)
   }
   [Symbol.dispose](): void {
     try { this.delete_sync() } catch {}

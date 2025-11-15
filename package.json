@@ -3,7 +3,9 @@
   "version": "1.0.6",
   "main": "./dist/base.js",
   "types": "./dist/base.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "exports": {
     ".": {
@@ -40,6 +42,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.10.0",
+    "pkg": "^5.8.1",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "vitest": "^4.0.7"
