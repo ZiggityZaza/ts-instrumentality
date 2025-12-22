@@ -95,3 +95,14 @@ import { createHash } from "crypto"
 export function hash(_str: string, _algorithm: string = "sha256"): string {
   return createHash(_algorithm).update(_str).digest("hex")
 }
+
+
+
+export function scoped(_target: unknown, _destructor: () => void) {
+  return new (class {
+    constructor(public readonly target: unknown, public readonly destructor: () => void) {}
+    [Symbol.dispose]() {
+      this.destructor()
+    }
+  })(_target, _destructor)
+}
