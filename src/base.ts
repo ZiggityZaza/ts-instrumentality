@@ -55,17 +55,25 @@ export class Out {
 
 
 
-export async function retry<T, Args extends any[]>(_fn: (..._args: Args) => Promise<T> | T, _maxAttempts: number, _delayMs: number, ..._args: Args): Promise<T> {
-  while (--_maxAttempts >= 0) {
+export type fn_t<T = void, Args extends unknown[] = [], Returns = Promise<T> | T> = (..._args: Args) => Returns
+
+
+
+export async function retry<T>(_fn: fn_t<T>, _maxAttempts: number, _delayMs: number, _callbackOnError: fn_t, _abortSignal?: AbortSignal): Promise<T> {
+  while (--_maxAttempts >= 0 && !(_abortSignal?.aborted ?? false)) {
     try {
-      return await _fn(..._args)
+      return await _fn()
     } catch (err: unknown) {
       if (_maxAttempts === 0)
         throw err
-      await new Promise(r => setTimeout(r, _delayMs))
+      await _callbackOnError()
+      await sleep(_delayMs, _abortSignal)
     }
   }
-  throw new Error(`Invalid max attempts value ${_maxAttempts}`)
+  if (_maxAttempts < 0)
+    throw new Error("Max attempts exceeded")
+  else
+    throw new Error("Operation aborted")
 }
 
 

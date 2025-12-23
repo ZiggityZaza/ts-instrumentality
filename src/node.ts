@@ -43,13 +43,14 @@ export abstract class Road {
       the represented entry on the disk.
     Example:
       0x123 as int* -> 42 those 4 bytes on stack/heap/seg/reg/...
-      File("/ex.txt") -> the actual file on disk
+      new File("/ex.txt") -> the actual file on disk
   */
-  isAt: string
+  protected pointsTo: string // Use only when necessary to change the path
+  get isAt(): string { return this.pointsTo }
 
   constructor(_lookFor: string) {
     fs.accessSync(_lookFor, fs.constants.F_OK)
-    this.isAt = ph.resolve(_lookFor)
+    this.pointsTo = ph.resolve(_lookFor)
     if (!(this instanceof road_type(this.isAt)))
       throw new Error(`Type missmatch: Path '${this.isAt}' is not of constructed type ${this.constructor.name}`)
   }
@@ -80,19 +81,7 @@ export abstract class Road {
     return fs.lstatSync(this.isAt)
   }
   async stats(): Promise<fs.Stats> {
-    return await fp.lstat(this.isAt)
-  }
-  modified_sync(): Date {
-    return this.stats_sync().mtime
-  }
-  async modified(): Promise<Date> {
-    return (await this.stats()).mtime
-  }
-  created_sync(): Date {
-    return this.stats_sync().birthtime
-  }
-  async created(): Promise<Date> {
-    return (await this.stats()).birthtime
+    return fp.lstat(this.isAt)
   }
 
   // Path methods
@@ -197,19 +186,19 @@ export class File extends Road {
     return fs.readFileSync(this.isAt, { encoding: "utf-8" })
   }
   async read_text(): Promise<string> {
-    return await fp.readFile(this.isAt, { encoding: "utf-8" })
+    return fp.readFile(this.isAt, { encoding: "utf-8" })
   }
   write_text_sync(_content: string): void {
     fs.writeFileSync(this.isAt, _content, { encoding: "utf-8" })
   }
   async write_text(_content: string): Promise<void> {
-    await fp.writeFile(this.isAt, _content, { encoding: "utf-8" })
+    return fp.writeFile(this.isAt, _content, { encoding: "utf-8" })
   }
   append_text_sync(_content: string): void {
     fs.appendFileSync(this.isAt, _content, { encoding: "utf-8" })
   }
   async append_text(_content: string): Promise<void> {
-    await fp.appendFile(this.isAt, _content, { encoding: "utf-8" })
+    return fp.appendFile(this.isAt, _content, { encoding: "utf-8" })
   }
 
   // Content as binary manipulation
@@ -217,19 +206,19 @@ export class File extends Road {
     return fs.readFileSync(this.isAt)
   }
   async read_bytes(): Promise<Buffer> {
-    return await fp.readFile(this.isAt)
+    return fp.readFile(this.isAt)
   }
   write_bytes_sync(_content: Buffer): void {
     fs.writeFileSync(this.isAt, _content)
   }
   async write_bytes(_content: Buffer): Promise<void> {
-    await fp.writeFile(this.isAt, _content)
+    return fp.writeFile(this.isAt, _content)
   }
   append_bytes_sync(_content: Buffer): void {
     fs.appendFileSync(this.isAt, _content)
   }
   async append_bytes(_content: Buffer): Promise<void> {
-    await fp.appendFile(this.isAt, _content)
+    return fp.appendFile(this.isAt, _content)
   }
 
   // Streaming
@@ -244,29 +233,23 @@ export class File extends Road {
   ext(): string {
     return ph.extname(this.isAt)
   }
-  size_sync(): number {
-    return this.stats_sync().size
-  }
-  async size(): Promise<number> {
-    return (await this.stats()).size
-  }
 
   // Implement abstract methods
   delete_sync(): void {
     fs.unlinkSync(this.isAt)
   }
   async delete(): Promise<void> {
-    await fp.unlink(this.isAt)
+    return fp.unlink(this.isAt)
   }
   move_sync(_into: Folder): void {
     const newPath = ph.join(_into.isAt, this.name())
     fs.renameSync(this.isAt, newPath)
-    this.isAt = newPath
+    this.pointsTo = newPath
   }
   async move(_into: Folder): Promise<void> {
     const newPath = ph.join(_into.isAt, this.name())
     await fp.rename(this.isAt, newPath)
-    this.isAt = newPath
+    this.pointsTo = newPath
   }
   copy_sync(_into: Folder): this {
     const newPath = ph.join(_into.isAt, this.name())
@@ -281,12 +264,12 @@ export class File extends Road {
   rename_sync(_to: string): void {
     const newPath = ph.join(ph.dirname(this.isAt), _to)
     fs.renameSync(this.isAt, newPath)
-    this.isAt = newPath
+    this.pointsTo = newPath
   }
   async rename(_to: string): Promise<void> {
     const newPath = ph.join(ph.dirname(this.isAt), _to)
     await fp.rename(this.isAt, newPath)
-    this.isAt = newPath
+    this.pointsTo = newPath
   }
 }
 
@@ -371,17 +354,17 @@ export class Folder extends Road {
     fs.rmdirSync(this.isAt, { recursive: true })
   }
   async delete(): Promise<void> {
-    await fp.rmdir(this.isAt, { recursive: true })
+    return fp.rmdir(this.isAt, { recursive: true })
   }
   move_sync(_into: Folder): void {
     const newPath = ph.join(_into.isAt, this.name())
     fs.renameSync(this.isAt, newPath)
-    this.isAt = newPath
+    this.pointsTo = newPath
   }
   async move(_into: Folder): Promise<void> {
     const newPath = ph.join(_into.isAt, this.name())
     await fp.rename(this.isAt, newPath)
-    this.isAt = newPath
+    this.pointsTo = newPath
   }
   copy_sync(_into: Folder): this {
     const newPath = ph.join(_into.isAt, this.name())
@@ -396,12 +379,12 @@ export class Folder extends Road {
   rename_sync(_to: string): void {
     const newPath = ph.join(ph.dirname(this.isAt), _to)
     fs.renameSync(this.isAt, newPath)
-    this.isAt = newPath
+    this.pointsTo = newPath
   }
   async rename(_to: string): Promise<void> {
     const newPath = ph.join(ph.dirname(this.isAt), _to)
     await fp.rename(this.isAt, newPath)
-    this.isAt = newPath
+    this.pointsTo = newPath
   }
 }
 
@@ -439,7 +422,7 @@ export class SymbolicLink extends Road {
   }
   async retarget(_newTarget: Road): Promise<void> {
     await this.delete()
-    await fp.symlink(_newTarget.isAt, this.isAt)
+    return fp.symlink(_newTarget.isAt, this.isAt)
   }
 
   // Implement abstract methods
@@ -447,17 +430,17 @@ export class SymbolicLink extends Road {
     fs.unlinkSync(this.isAt)
   }
   async delete(): Promise<void> {
-    await fp.unlink(this.isAt)
+    return fp.unlink(this.isAt)
   }
   move_sync(_into: Folder): void {
     const newPath = ph.join(_into.isAt, this.name())
     fs.renameSync(this.isAt, newPath)
-    this.isAt = newPath
+    this.pointsTo = newPath
   }
   async move(_into: Folder): Promise<void> {
     const newPath = ph.join(_into.isAt, this.name())
     await fp.rename(this.isAt, newPath)
-    this.isAt = newPath
+    this.pointsTo = newPath
   }
   copy_sync(_into: Folder): this {
     const newPath = ph.join(_into.isAt, this.name())
@@ -474,12 +457,12 @@ export class SymbolicLink extends Road {
   rename_sync(_to: string): void {
     const newPath = ph.join(ph.dirname(this.isAt), _to)
     fs.renameSync(this.isAt, newPath)
-    this.isAt = newPath
+    this.pointsTo = newPath
   }
   async rename(_to: string): Promise<void> {
     const newPath = ph.join(ph.dirname(this.isAt), _to)
     await fp.rename(this.isAt, newPath)
-    this.isAt = newPath
+    this.pointsTo = newPath
   }
 }
 
