@@ -1,4 +1,3 @@
-import * as bs from "./base.js"
 if (typeof document === 'undefined' || typeof window === 'undefined')
   throw new Error("This module can only be used in a browser (or similar) environment where 'document' and 'window' are defined.")
 
