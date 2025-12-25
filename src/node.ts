@@ -275,7 +275,7 @@ export class File extends Road {
 
 
 
-
+import * as glob from "fast-glob"
 export class Folder extends Road {
   static async create(_at: string): Promise<Folder> {
     try {
@@ -292,6 +292,14 @@ export class Folder extends Road {
       fs.mkdirSync(_at, { recursive: true })
     }
     return new Folder(_at)
+  }
+  static walk_list_sync(_glob: string): Road[] {
+    /*
+      List all entries matching a glob-ish path
+      synchronously.
+    */
+    const entries = glob.sync(_glob, { dot: true, onlyFiles: false, absolute: true })
+    return entries.map(entry => Road.factory_sync(entry))
   }
 
   // list_sync overloads
