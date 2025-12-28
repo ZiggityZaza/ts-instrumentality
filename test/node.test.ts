@@ -194,4 +194,6 @@ describe('Temporary entries', () => {
     tempFolder[Symbol.dispose]()
     expect(fs.existsSync(tempPath)).toBe(false)
   })
+
+
 })
