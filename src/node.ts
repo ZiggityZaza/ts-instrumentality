@@ -441,9 +441,7 @@ export class File extends Road {
    * @throws Will throw if the file cannot be read.
    */
   async *it_lines(): AsyncIterableIterator<string> {
-    const readStream = fs.createReadStream(this.isAt, { encoding: "utf-8" })
-    const lineReader = rl.createInterface({ input: readStream, crlfDelay: Infinity })
-    for await (const line of lineReader)
+    for await (const line of rl.createInterface({ input: fs.createReadStream(this.isAt, { encoding: "utf-8" }), crlfDelay: Infinity }))
       yield line
   }
   /**
@@ -604,8 +602,6 @@ export class File extends Road {
     this.assert_mutable()
     return fp.appendFile(this.isAt, _content)
   }
-
-  // Streaming
   /**
    * Creates and returns a readable file stream for the file located at `this.isAt`.
    *
@@ -702,17 +698,41 @@ export class File extends Road {
     fs.copyFileSync(this.isAt, newPath)
     return new File(newPath) as this
   }
+  /**
+   * Asynchronously copies the current file to the specified folder.
+   *
+   * @param _into - The destination folder where the file should be copied.
+   * @returns A promise that resolves to a new instance of this file at the new location.
+   */
   async copy(_into: Folder): Promise<this> {
     const newPath = _into.join(this.name())
     await fp.copyFile(this.isAt, newPath)
     return new File(newPath) as this
   }
+  /**
+   * Renames the current node synchronously to the specified path.
+   *
+   * This method asserts that the node is mutable, constructs the new path
+   * by joining the parent directory with the provided `_to` string, and
+   * then renames the file or directory on the filesystem. After renaming,
+   * it updates the internal reference to the new path.
+   *
+   * @param _to - The new name or relative path for the node.
+   * @throws {Error} If the node is not mutable or if the rename operation fails.
+   */
   rename_sync(_to: string): void {
     this.assert_mutable()
     const newPath = this.parent().join(_to)
     fs.renameSync(this.isAt, newPath)
     this.pointsTo = newPath
   }
+  /**
+   * Renames the current node to the specified new name.
+   *
+   * @param _to - The new name for the node.
+   * @returns A promise that resolves when the rename operation is complete.
+   * @throws If the node is not mutable.
+   */
   async rename(_to: string): Promise<void> {
     this.assert_mutable()
     const newPath = this.parent().join(_to)
@@ -724,7 +744,41 @@ export class File extends Road {
 
 
 import * as glob from "fast-glob"
+/**
+ * Represents a folder in the filesystem, extending the `Road` class.
+ * Provides synchronous and asynchronous methods for folder creation, traversal, listing, searching, and manipulation.
+ *
+ * ## Static Methods
+ * - `create(_at: string): Promise<Folder>`: Asynchronously creates a folder at the specified path if it does not exist.
+ * - `create_sync(_at: string): Folder`: Synchronously creates a folder at the specified path if it does not exist.
+ * - `walk_list_sync(_glob: string): Road[]`: Synchronously lists all entries matching a glob pattern.
+ * - `walk_list(_glob: string): Promise<Road[]>`: Asynchronously lists all entries matching a glob pattern.
+ *
+ * ## Instance Methods
+ * - `list_sync<T extends Road>(expectedType?: new (_: string) => T): Road[] | T[]`: Synchronously lists entries in the folder, optionally filtering by type.
+ * - `list<T extends Road>(_expectedType?: new (_: string) => T): Promise<Road[] | T[]>`: Asynchronously lists entries in the folder, optionally filtering by type.
+ * - `find_sync<T extends Road>(name: string, _expectedType?: new (_: string) => T): Road | T | null`: Synchronously finds an entry by name, optionally filtering by type.
+ * - `find<T extends Road>(name: string, _expectedType?: new (_: string) => T): Promise<Road | T | null>`: Asynchronously finds an entry by name, optionally filtering by type.
+ * - `delete_sync(): void`: Synchronously deletes the folder and its contents.
+ * - `delete(): Promise<void>`: Asynchronously deletes the folder and its contents.
+ * - `move_sync(_into: Folder): void`: Synchronously moves the folder into another folder.
+ * - `move(_into: Folder): Promise<void>`: Asynchronously moves the folder into another folder.
+ * - `copy_sync(_into: Folder): this`: Synchronously copies the folder into another folder.
+ * - `copy(_into: Folder): Promise<this>`: Asynchronously copies the folder into another folder.
+ * - `rename_sync(_to: string): void`: Synchronously renames the folder.
+ * - `rename(_to: string): Promise<void>`: Asynchronously renames the folder.
+ *
+ * @remarks
+ * This class assumes the existence of the `Road` base class and uses Node.js `fs` and `glob` modules for filesystem operations.
+ */
 export class Folder extends Road {
+  /**
+   * Creates a new `Folder` instance at the specified path.
+   * If the folder does not exist, it will be created recursively.
+   *
+   * @param _at - The file system path where the folder should be created or accessed.
+   * @returns A promise that resolves to a `Folder` instance representing the specified path.
+   */
   static async create(_at: string): Promise<Folder> {
     try {
       await fp.access(_at, fs.constants.F_OK)
@@ -733,6 +787,13 @@ export class Folder extends Road {
     }
     return new Folder(_at)
   }
+  /**
+   * Synchronously creates a folder at the specified path if it does not already exist.
+   *
+   * @param _at - The path where the folder should be created.
+   * @returns A new instance of the `Folder` class representing the created or existing folder.
+   * @throws Will throw an error if the folder cannot be created and does not already exist.
+   */
   static create_sync(_at: string): Folder {
     try {
       fs.accessSync(_at, fs.constants.F_OK)
@@ -741,17 +802,52 @@ export class Folder extends Road {
     }
     return new Folder(_at)
   }
+  /**
+   * Synchronously walks through the file system entries matching the given glob pattern
+   * and returns an array of `Road` instances for each matched entry.
+   *
+   * @param _glob - The glob pattern to match file system entries.
+   * @returns An array of `Road` objects created from the matched entries.
+   */
   static walk_list_sync(_glob: string): Road[] {
     const entries = glob.sync(_glob, { dot: true, onlyFiles: false, absolute: true })
     return entries.map(entry => Road.factory_sync(entry))
   }
+  /**
+   * Asynchronously walks through the file system entries matching the given glob pattern
+   * and returns an array of `Road` instances for each entry found.
+   *
+   * @param _glob - The glob pattern to match file system entries.
+   * @returns A promise that resolves to an array of `Road` objects corresponding to the matched entries.
+   */
   static async walk_list(_glob: string): Promise<Road[]> {
     const entries = await glob.async(_glob, { dot: true, onlyFiles: false, absolute: true })
     const roads = entries.map(async entry => Road.factory(entry))
     return Promise.all(roads)
   }
+  /**
+   * Asynchronously iterates over file system entries matching the given glob pattern.
+   *
+   * @param _glob - The glob pattern to match files and directories.
+   * @returns An async iterable iterator that yields `Road` instances for each matched entry.
+   *
+   * @example
+   * for await (const road of Node.walk_it('**\*')) {
+   *   // process each road
+   * }
+   */
+  static async *walk_it(_glob: string): AsyncIterableIterator<Road> {
+    const stream = glob.stream(_glob, { dot: true, onlyFiles: false, absolute: true })
+    for await (const entry of stream)
+      yield Road.factory(entry.toString()) // .toString() because both Buffer and String are possible
+  }
 
   // list_sync overloads
+  /**
+   * Synchronously lists all entries in the current folder.
+   *
+   * @returns An array of `Road` instances representing all entries in the folder.
+   */
   list_sync(): Road[]
   list_sync<T extends Road>(expectedType: new (_: string) => T): T[]
   list_sync<T extends Road>(expectedType?: new (_: string) => T): Road[] | T[] {
@@ -760,13 +856,13 @@ export class Folder extends Road {
       return entries
     return entries.filter(entry => entry instanceof expectedType) as T[]
   }
-  *it_content_sync(): IterableIterator<Road> {
-    const entries = fs.readdirSync(this.isAt)
-    for (const entry of entries)
-      yield Road.factory_sync(this.join(entry))
-  }
 
   // list async overloads
+  /**
+   * Asynchronously lists all entries in the current folder.
+   *
+   * @returns A promise that resolves to an array of `Road` instances representing all entries in the folder.
+   */
   async list(): Promise<Road[]>
   async list<T extends Road>(_expectedType: new (_: string) => T): Promise<T[]>
   async list<T extends Road>(_expectedType?: new (_: string) => T): Promise<Road[] | T[]> {
@@ -776,13 +872,14 @@ export class Folder extends Road {
       return resolvedEntries
     return resolvedEntries.filter(entry => entry instanceof _expectedType) as T[]
   }
-  async *it_content(): AsyncIterableIterator<Road> {
-    const entries = await fp.readdir(this.isAt)
-    for (const entry of entries)
-      yield await Road.factory(this.join(entry))
-  }
 
   // find_sync overloads
+  /**
+   * Synchronously finds an entry by name in the current folder.
+   *
+   * @param name - The name of the entry to find.
+   * @returns The found `Road` instance or `null` if not found.
+   */
   find_sync(name: string): Road | null
   find_sync<T extends Road>(name: string, _expectedType: new (_: string) => T): T | null
   find_sync<T extends Road>(name: string, _expectedType?: new (_: string) => T): Road | T | null {
@@ -800,6 +897,12 @@ export class Folder extends Road {
   }
 
   // find async overloads
+  /**
+   * Asynchronously finds an entry by name in the current folder.
+   * 
+   * @param name - The name of the entry to find.
+   * @returns A promise that resolves to the found `Road` instance or `null` if not found.
+   */
   async find(name: string): Promise<Road | null>
   async find<T extends Road>(name: string, _expectedType: new (_: string) => T): Promise<T | null>
   async find<T extends Road>(name: string, _expectedType?: new (_: string) => T): Promise<Road | T | null> {
@@ -817,42 +920,116 @@ export class Folder extends Road {
   }
 
   // Implement abstract methods
+  /**
+   * Synchronously deletes the directory at the current path, including all its contents.
+   * 
+   * @remarks
+   * This method asserts that the node is mutable before performing the deletion.
+   * It uses `fs.rmdirSync` with the `recursive` option set to `true`, which removes the directory and all its descendants.
+   * 
+   * @throws {Error} If the node is not mutable or if the deletion fails.
+   */
   delete_sync(): void {
     this.assert_mutable()
     fs.rmdirSync(this.isAt, { recursive: true })
   }
+  /**
+   * Deletes the directory at the current path.
+   * 
+   * This method asserts that the node is mutable before attempting deletion.
+   * It recursively removes the directory and all of its contents.
+   * 
+   * @returns A promise that resolves when the directory has been deleted.
+   * @throws If the node is not mutable or if the deletion fails.
+   */
   async delete(): Promise<void> {
     this.assert_mutable()
     return fp.rmdir(this.isAt, { recursive: true })
   }
+  /**
+   * Moves the current node synchronously into the specified folder.
+   *
+   * This method asserts that the node is mutable, computes the new path by joining
+   * the target folder with the current node's name, and then renames (moves) the node
+   * to the new location using a synchronous file system operation. Updates the internal
+   * reference to the new path.
+   *
+   * @param _into - The target `Folder` instance where this node should be moved.
+   * @throws {Error} If the node is not mutable or if the file system operation fails.
+   */
   move_sync(_into: Folder): void {
     this.assert_mutable()
     const newPath = _into.join(this.name())
     fs.renameSync(this.isAt, newPath)
     this.pointsTo = newPath
   }
+  /**
+   * Moves the current node to a new folder.
+   *
+   * This method asserts that the node is mutable, constructs the new path by joining
+   * the target folder with the current node's name, renames (moves) the node to the new path,
+   * and updates the internal reference to the new location.
+   *
+   * @param _into - The target `Folder` to move this node into.
+   * @returns A promise that resolves when the move operation is complete.
+   * @throws If the node is not mutable or if the rename operation fails.
+   */
   async move(_into: Folder): Promise<void> {
     this.assert_mutable()
     const newPath = _into.join(this.name())
     await fp.rename(this.isAt, newPath)
     this.pointsTo = newPath
   }
+  /**
+   * Copies the current folder synchronously into the specified target folder.
+   *
+   * @param _into - The target `Folder` instance where the current folder will be copied.
+   * @returns A new instance of the folder at the destination path, typed as `this`.
+   *
+   * @remarks
+   * This method uses `fs.cpSync` to perform a recursive copy of the folder's contents.
+   * The new folder will have the same name as the original and will be located inside the target folder.
+   */
   copy_sync(_into: Folder): this {
     const newPath = _into.join(this.name())
     fs.cpSync(this.isAt, newPath, { recursive: true })
     return new Folder(newPath) as this
   }
+  /**
+   * Copies the current folder to the specified destination folder.
+   *
+   * @param _into - The destination `Folder` where the current folder will be copied.
+   * @returns A promise that resolves to the new `Folder` instance at the destination path.
+   */
   async copy(_into: Folder): Promise<this> {
     const newPath = _into.join(this.name())
     await fp.cp(this.isAt, newPath, { recursive: true })
     return new Folder(newPath) as this
   }
+  /**
+   * Renames the current node synchronously to the specified new path.
+   *
+   * This method asserts that the node is mutable before proceeding. It constructs
+   * the new path by joining the parent directory with the provided `_to` string,
+   * then renames the file or directory on the filesystem using `fs.renameSync`.
+   * After renaming, it updates the internal `pointsTo` property to reflect the new path.
+   *
+   * @param _to - The new name or path for the node relative to its parent.
+   * @throws {Error} If the node is not mutable or if the rename operation fails.
+   */
   rename_sync(_to: string): void {
     this.assert_mutable()
     const newPath = this.parent().join(_to)
     fs.renameSync(this.isAt, newPath)
     this.pointsTo = newPath
   }
+  /**
+   * Renames the current node to the specified new name.
+   *
+   * @param _to - The new name for the node.
+   * @returns A promise that resolves when the rename operation is complete.
+   * @throws If the node is not mutable.
+   */
   async rename(_to: string): Promise<void> {
     this.assert_mutable()
     const newPath = this.parent().join(_to)
@@ -863,7 +1040,33 @@ export class Folder extends Road {
 
 
 
+/**
+ * Represents a symbolic link (symlink) in the filesystem, extending the `Road` class.
+ * Provides both asynchronous and synchronous methods for creating, deleting, moving, copying,
+ * renaming, and retargeting symbolic links, as well as resolving their targets.
+ *
+ * @remarks
+ * - The class assumes the existence of utility modules such as `fs`, `fp` (promisified fs), and `ph` (path).
+ * - All mutating operations assert that the symbolic link is mutable before proceeding.
+ * - Methods that operate on the filesystem are provided in both async and sync variants.
+ *
+ * @example
+ * ```typescript
+ * // Asynchronously create a symbolic link
+ * const symlink = await SymbolicLink.create('/path/to/link', targetRoad);
+ *
+ * // Synchronously move a symbolic link
+ * symlink.move_sync(newFolder);
+ * ```
+ */
 export class SymbolicLink extends Road {
+  /**
+   * Creates a symbolic link at the specified path if it does not already exist.
+   *
+   * @param _at - The file system path where the symbolic link should be created.
+   * @param _target - (Optional) The target `Road` object to which the symbolic link should point.
+   * @returns A promise that resolves to a new `SymbolicLink` instance representing the created or existing link.
+   */
   static async create(_at: string, _target?: Road): Promise<SymbolicLink> {
     try {
       await fp.access(_at, fs.constants.F_OK)
@@ -872,6 +1075,16 @@ export class SymbolicLink extends Road {
     }
     return new SymbolicLink(_at)
   }
+  /**
+   * Creates a symbolic link at the specified path synchronously.
+   * 
+   * If the path already exists, no action is taken. If it does not exist,
+   * a new symbolic link is created pointing to the target's path.
+   * 
+   * @param _at - The file system path where the symbolic link should be created.
+   * @param _target - (Optional) The `Road` instance representing the target of the symbolic link.
+   * @returns A new `SymbolicLink` instance representing the created or existing link.
+   */
   static create_sync(_at: string, _target?: Road): SymbolicLink {
     try {
       fs.accessSync(_at, fs.constants.F_OK)
@@ -882,18 +1095,50 @@ export class SymbolicLink extends Road {
   }
 
   // Target methods
+  /**
+   * Synchronously creates and returns a `Road` instance based on the symbolic link at the current node's path.
+   *
+   * Resolves the directory name of `this.isAt`, reads the target of the symbolic link at `this.isAt`,
+   * and uses these values to construct a new `Road` object via `Road.factory_sync`.
+   *
+   * @returns {Road} The constructed `Road` instance representing the resolved symbolic link.
+   */
   target_sync(): Road {
     return Road.factory_sync(ph.resolve(ph.dirname(this.isAt), fs.readlinkSync(this.isAt)))
   }
+  /**
+   * Asynchronously resolves the target of a symbolic link represented by `this.isAt`.
+   * Reads the link at the current path, resolves its absolute path, and returns a `Road` instance for the target.
+   *
+   * @returns {Promise<Road>} A promise that resolves to a `Road` instance representing the target of the symbolic link.
+   * @throws Will throw if reading the symbolic link or resolving the path fails.
+   */
   async target(): Promise<Road> {
     const linkPath = await fp.readlink(this.isAt)
     return Road.factory(ph.resolve(ph.dirname(this.isAt), linkPath))
   }
+  /**
+   * Retargets the current node to a new target synchronously by updating its symbolic link.
+   *
+   * This method first asserts that the node is mutable, then deletes the existing symbolic link,
+   * and finally creates a new symbolic link pointing to the specified `_newTarget`.
+   *
+   * @param _newTarget - The `Road` instance representing the new target location for the symbolic link.
+   * @throws Will throw an error if the node is not mutable or if file system operations fail.
+   */
   retarget_sync(_newTarget: Road): void {
     this.assert_mutable()
     this.delete_sync()
     fs.symlinkSync(_newTarget.isAt, this.isAt)
   }
+  /**
+   * Retargets the current node to a new target by first ensuring the node is mutable,
+   * deleting the existing target, and then creating a symbolic link to the new target.
+   *
+   * @param _newTarget - The new `Road` instance to which the node should be retargeted.
+   * @returns A promise that resolves when the retargeting operation is complete.
+   * @throws If the node is not mutable or if the delete or symlink operations fail.
+   */
   async retarget(_newTarget: Road): Promise<void> {
     this.assert_mutable()
     await this.delete()
@@ -901,44 +1146,114 @@ export class SymbolicLink extends Road {
   }
 
   // Implement abstract methods
+  /**
+   * Synchronously deletes the symbolic link at the current path.
+   *
+   * @throws {Error} If the node is not mutable or if the deletion fails.
+   * @remarks
+   * This method first checks if the node is mutable by calling `assert_mutable()`.
+   * If the check passes, it deletes the symbolic link using `fs.unlinkSync`.
+   */
   delete_sync(): void {
     this.assert_mutable()
     fs.unlinkSync(this.isAt)
   }
+  /**
+   * Asynchronously deletes the symbolic link at the current path.
+   *
+   * @returns A promise that resolves when the symbolic link has been deleted.
+   * @throws {Error} If the node is not mutable or if the deletion fails.
+   * @remarks
+   * This method first checks if the node is mutable by calling `assert_mutable()`.
+   * If the check passes, it deletes the symbolic link using `fp.unlink`.
+   */
   async delete(): Promise<void> {
     this.assert_mutable()
     return fp.unlink(this.isAt)
   }
+  /**
+   * Synchronously moves the symbolic link to the specified folder.
+   *
+   * @param _into - The target folder where the symbolic link should be moved.
+   * @throws {Error} If the node is not mutable.
+   */
   move_sync(_into: Folder): void {
     this.assert_mutable()
     const newPath = _into.join(this.name())
     fs.renameSync(this.isAt, newPath)
     this.pointsTo = newPath
   }
+  /**
+   * Moves the current node into the specified folder.
+   *
+   * This method asserts that the node is mutable, constructs the new path by joining
+   * the target folder with the current node's name, and then renames (moves) the node
+   * to the new location. After the move, it updates the internal reference to the new path.
+   *
+   * @param _into - The target `Folder` instance where the node should be moved.
+   * @returns A promise that resolves when the move operation is complete.
+   * @throws If the node is not mutable or if the file system operation fails.
+   */
   async move(_into: Folder): Promise<void> {
     this.assert_mutable()
     const newPath = _into.join(this.name())
     await fp.rename(this.isAt, newPath)
     this.pointsTo = newPath
   }
+  /**
+   * Creates a symbolic link to the current node within the specified target folder.
+   *
+   * @param _into - The destination folder where the symbolic link will be created.
+   * @returns A new instance of the symbolic link at the new location.
+   *
+   * @remarks
+   * This method synchronously creates a symbolic link using the file system's `symlinkSync` method.
+   * The link will have the same name as the original node and will point to the original target.
+   */
   copy_sync(_into: Folder): this {
     const newPath = _into.join(this.name())
     const target = this.target_sync()
     fs.symlinkSync(target.isAt, newPath)
     return new SymbolicLink(newPath) as this
   }
+  /**
+   * Asynchronously creates a symbolic link to the current node within the specified target folder.
+   *
+   * @param _into - The destination folder where the symbolic link will be created.
+   * @returns A promise that resolves to a new instance of the symbolic link at the new location.
+   * @remarks
+   * This method uses the asynchronous `symlink` function to create the symbolic link.
+   * The new link will have the same name as the original node and will point to the original target.
+   */
   async copy(_into: Folder): Promise<this> {
     const newPath = _into.join(this.name())
     const target = await this.target()
     await fp.symlink(target.isAt, newPath)
     return new SymbolicLink(newPath) as this
   }
+  /**
+   * Renames the current node synchronously to the specified new path.
+   *
+   * This method asserts that the node is mutable before proceeding. It constructs
+   * the new path by joining the parent directory with the provided `_to` string,
+   * then renames the file or directory on the filesystem using `fs.renameSync`.
+   * After renaming, it updates the internal `pointsTo` property to reflect the new path.
+   * @param _to - The new name or path for the node relative to its parent.
+   * @throws {Error} If the node is not mutable or if the rename operation fails.
+   */
   rename_sync(_to: string): void {
     this.assert_mutable()
     const newPath = this.parent().join(_to)
     fs.renameSync(this.isAt, newPath)
     this.pointsTo = newPath
   }
+  /**
+   * Renames the current node to the specified new name.
+   *
+   * @param _to - The new name for the node.
+   * @returns A promise that resolves when the rename operation is complete.
+   * @throws If the node is not mutable.
+   */
   async rename(_to: string): Promise<void> {
     this.assert_mutable()
     const newPath = this.parent().join(_to)
@@ -949,12 +1264,24 @@ export class SymbolicLink extends Road {
 
 
 
+/**
+ * Abstract base class representing unusable filesystem entries.
+ * 
+ * `UnusuableRoad` is intended for special files or filesystem entries that can't,
+ * or shouldn't, be manipulated (e.g., device files, system-reserved entries).
+ * 
+ * All mutating operations such as delete, move, copy, and rename are overridden
+ * to throw errors, preventing accidental modification that could cause system issues.
+ * 
+ * @remarks
+ * - The `mutable` property is always `false`.
+ * - All mutating methods throw an error when called.
+ * 
+ * @extends Road
+ * 
+ * @abstract
+ */
 export abstract class UnusuableRoad extends Road {
-  /*
-    Abstract base class for unusable filesystem entries.
-    These are special files that cannot or
-    at least shouldn't be be manipulated.
-  */
   override readonly mutable: boolean = false // Modification is most likely to cause system issues (e.g. deleting a device file)
   delete_sync(): never { throw new Error(`Cannot delete type ${this.constructor.name} at '${this.isAt}'`) }
   async delete(): Promise<never> { throw new Error(`Cannot delete type ${this.constructor.name} at '${this.isAt}'`) }
@@ -965,33 +1292,64 @@ export abstract class UnusuableRoad extends Road {
   rename_sync(_to: string): never { throw new Error(`Cannot rename type ${this.constructor.name} at '${this.isAt}'`) }
   async rename(_to: string): Promise<never> { throw new Error(`Cannot rename type ${this.constructor.name} at '${this.isAt}'`) }
 }
+/**
+ * Represents a block device in the system.
+ * @remarks This class extends {@link UnusuableRoad} and inherits its properties and methods.
+ */
 export class BlockDevice extends UnusuableRoad { }
+/**
+ * Represents a character device in the system.
+ * @remarks This class extends {@link UnusuableRoad} and inherits its properties and methods.
+ */
 export class CharacterDevice extends UnusuableRoad { }
+/**
+ * Represents a FIFO (named pipe) in the system.
+ * @remarks This class extends {@link UnusuableRoad} and inherits its properties and methods.
+ */
 export class Fifo extends UnusuableRoad { }
+/**
+ * Represents a socket in the system.
+ * @remarks This class extends {@link UnusuableRoad} and inherits its properties and methods.
+ */
 export class Socket extends UnusuableRoad { }
 
 
 
+/**
+ * Represents a file that automatically reloads its content from disk before each read operation.
+ *
+ * This class extends the `File` class and maintains the latest content of the file in memory.
+ * It continuously monitors the file for changes and updates its content accordingly.
+ * 
+ * @remarks
+ * - May be resource intensive for large files or when the file changes rapidly.
+ * - Uses an `AbortController` to allow for graceful disposal and stopping of the monitoring loop.
+ *
+ * @example
+ * ```typescript
+ * const liveFile = new LiveFile('/path/to/file.txt');
+ * // Use liveFile as needed...
+ * ```
+ *
+ * @extends File
+ */
 export class LiveFile extends File {
-  /*
-    A file that automatically reloads its content from disk
-    before each read operation.
-    Note:
-      Might be resource intensive on large files or
-      rapid changes.
-  */
   lastReadContent: Buffer = Buffer.alloc(0)
   abortController: AbortController = new AbortController()
   constructor(_at: string) {
     super(_at)
     ;(async () => {
       while (!this.abortController.signal.aborted) {
-        const currentContent = this.read_bytes_sync()
-        if (!currentContent.equals(this.lastReadContent))
-          this.lastReadContent = currentContent
+        await this.update()
         await this.on_change(this.abortController.signal )
       }
     })()
+  }
+  update_sync(): void {
+    this.lastReadContent = this.read_bytes_sync()
+  }
+  async update(): Promise<void> {
+    this.lastReadContent = await this.read_bytes()
   }
   [Symbol.dispose](): void {
     this.abortController.abort()
@@ -1003,6 +1361,22 @@ export class LiveFile extends File {
 
 
 
+/**
+ * Represents a temporary file that is automatically deleted when disposed.
+ * 
+ * @remarks
+ * - Extends the `File` class, providing a mutable temporary file.
+ * - The file is created in the system's temporary directory with a unique name.
+ * - Implements both synchronous and asynchronous disposal using `Symbol.dispose` and `Symbol.asyncDispose`.
+ * - On disposal, attempts to delete the file and logs an error if deletion fails.
+ * 
+ * @example
+ * ```typescript
+ * using temp = new TempFile();
+ * // Use temp file...
+ * // File is deleted automatically when disposed.
+ * ```
+ */
 export class TempFile extends File {
   override readonly mutable: boolean = true
   constructor() {
@@ -1017,6 +1391,23 @@ export class TempFile extends File {
 }
 
 
+/**
+ * Represents a temporary folder that is automatically created in the system's temporary directory.
+ * 
+ * The folder is assigned a unique name using the current timestamp and a random UUID.
+ * The folder is marked as mutable and is intended for temporary use.
+ * 
+ * When disposed (either synchronously or asynchronously), the folder attempts to delete itself.
+ * If deletion fails, an error message is logged to the console.
+ * 
+ * @extends Folder
+ * 
+ * @example
+ * ```typescript
+ * using temp = new TempFolder();
+ * // Use temp folder...
+ * ```
+ */
 export class TempFolder extends Folder {
   override readonly mutable: boolean = true
   constructor() {
