@@ -26,16 +26,16 @@
         "types": "./dist/dom.d.ts"
       }
     },
-    "./net": {
-      "node": {
-        "import": "./dist/serv.js",
-        "types": "./dist/serv.d.ts"
-      }
-    },
     "./road": {
       "node": {
         "import": "./dist/road.js",
         "types": "./dist/road.d.ts"
+      }
+    },
+    "./net": {
+      "node": {
+        "import": "./dist/serv.js",
+        "types": "./dist/serv.d.ts"
       }
     }
   },
