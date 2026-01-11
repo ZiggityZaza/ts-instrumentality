@@ -2,11 +2,19 @@
   "name": "ts-instrumentality",
   "version": "1.0.6",
   "main": "./dist/base.js",
-  "types": "./dist/base.d.ts",
-  "files": [
-    "dist"
-  ],
-  "type": "module",
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.16",
+    "tsx": "^4.21.0",
+
+    "@eslint/js": "^9.39.2",
+    "@typescript-eslint/eslint-plugin": "^8.51.0",
+    "@typescript-eslint/parser": "^8.51.0",
+    "eslint": "^9.39.2",
+    "jiti": "^2.6.1",
+    "typescript-eslint": "^8.51.0"
+  },
   "exports": {
     ".": {
       "import": "./dist/base.js",
@@ -31,22 +39,14 @@
       }
     }
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepare": "npx tsc"
+    "prepare": "tsc"
   },
-  "devDependencies": {
-    "@eslint/js": "^9.39.2",
-    "@types/node": "^24.10.0",
-    "@typescript-eslint/eslint-plugin": "^8.51.0",
-    "@typescript-eslint/parser": "^8.51.0",
-    "eslint": "^9.39.2",
-    "globals": "^16.5.0",
-    "jiti": "^2.6.1",
-    "tsx": "^4.21.0",
-    "typescript": "^5.9.3",
-    "typescript-eslint": "^8.51.0",
-    "vitest": "^4.0.7"
-  }
+  "type": "module",
+  "types": "./dist/base.d.ts"
 }

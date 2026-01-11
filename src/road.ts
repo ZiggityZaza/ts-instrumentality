@@ -1,8 +1,3 @@
-if (typeof process === 'undefined' || typeof require === 'undefined')
-  throw new Error("This module can only be used in a Node.js environment where 'process' and 'require' are defined.")
-
-
-
 import * as rl from "node:readline"
 import * as fs from "node:fs"
 import * as fp from "node:fs/promises"
@@ -105,8 +100,10 @@ export abstract class Road {
    */
   get isAt(): string { return this.pointsTo }
   /**
-   * Indicates whether the underlying filesystem entry can be modified.
-   * Set to `false` to prevent modifications even if the os's filesystem allows it.
+   * Indicates whether this instance is allowed to perform modifying operations on the underlying filesystem entry.
+   * This does NOT reflect the actual filesystem permissions, but rather serves as an internal flag.
+   * Subclasses can override this property if necessary.
+   * Set to `false` to prevent modifications even if the os's filesystem would allow it.
    * @returns `true` if the entry is mutable; otherwise, `false`.
    */
   mutable: boolean = true
@@ -1294,6 +1291,10 @@ export class SymbolicLink extends Road {
  */
 export abstract class UnusuableRoad extends Road {
   override readonly mutable: boolean = false // Modification is most likely to cause system issues (e.g. deleting a device file)
+  constructor(_at: string) {
+    super(_at)
+    Object.freeze(this) // Prevent any modifications to the instance
+  }
   delete_sync(): never { throw new Error(`Cannot delete type ${this.constructor.name} at '${this.isAt}'`) }
   async delete(): Promise<never> { throw new Error(`Cannot delete type ${this.constructor.name} at '${this.isAt}'`) }
   move_sync(): never { throw new Error(`Cannot move type ${this.constructor.name} at '${this.isAt}'`) }
@@ -1327,7 +1328,7 @@ export class Socket extends UnusuableRoad { }
 
 
 /**
- * Represents a file that automatically reloads its content from disk before each read operation.
+ * Represents a file that automatically reloads its content from disk when changed.
  *
  * This class extends the `File` class and maintains the latest content of the file in memory.
  * It continuously monitors the file for changes and updates its content accordingly.
@@ -1392,15 +1393,15 @@ export class LiveFile extends File implements AsyncDisposable, Disposable {
  * ```
  */
 export class TempFile extends File implements AsyncDisposable, Disposable {
-  override readonly mutable: boolean = true
+  override readonly mutable: boolean = true // Must be mutable to allow deletion
   constructor() {
     super(File.create_sync(ph.join(os.tmpdir(), `tempfile_${Date.now()}_${crypto.randomUUID()}.tmp`)).isAt)
   }
   [Symbol.dispose](): void {
-    try { this.delete_sync() } catch { console.error(`TempFile: Failed to delete temporary file at '${this.isAt}'`) }
+    this.delete_sync()
   }
   async [Symbol.asyncDispose](): Promise<void> {
-    try { await this.delete() } catch { console.error(`TempFile: Failed to delete temporary file at '${this.isAt}'`) }
+    await this.delete()
   }
 }
 
@@ -1423,7 +1424,7 @@ export class TempFile extends File implements AsyncDisposable, Disposable {
  * ```
  */
 export class TempFolder extends Folder implements AsyncDisposable, Disposable {
-  override readonly mutable: boolean = true
+  override readonly mutable: boolean = true // Must be mutable to allow deletion
   constructor() {
     super(Folder.create_sync(ph.join(os.tmpdir(), `tempfolder_${Date.now()}_${crypto.randomUUID()}`)).isAt)
   }

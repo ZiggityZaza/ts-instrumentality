@@ -1,8 +1,3 @@
-if (typeof document === 'undefined' || typeof window === 'undefined')
-  throw new Error("This module can only be used in a browser (or similar) environment where 'document' and 'window' are defined.")
-
-
-
 /**
  * Returns a Promise that resolves when the DOM is fully loaded and ready.
  *

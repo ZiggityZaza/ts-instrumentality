@@ -1,8 +1,3 @@
-if (typeof process === 'undefined' || typeof require === 'undefined')
-    throw new Error('This module can only be used in a Node.js environment.')
-
-
-
 import * as h2 from "http2"
 import { URL } from "node:url"
 
