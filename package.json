@@ -28,8 +28,8 @@
     },
     "./net": {
       "node": {
-        "import": "./dist/net.js",
-        "types": "./dist/net.d.ts"
+        "import": "./dist/serv.js",
+        "types": "./dist/serv.d.ts"
       }
     },
     "./road": {
