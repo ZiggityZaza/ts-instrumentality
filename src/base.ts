@@ -160,3 +160,17 @@ export function scoped(_target: unknown, _destructor: () => unknown) {
     }
   })(_target, _destructor)
 }
+
+
+
+/**
+ * Helper type to add two number types together.
+ *
+ * @template A - The first number type.
+ * @template B - The second number type.
+ */
+// Add<A, B> produces the sum of A and B at the type level
+export type Add<A extends number, B extends number> =
+  [...BuildTuple<A>, ...BuildTuple<B>]['length']
+// Helper type to build a tuple of length N
+type BuildTuple<N extends number, T extends unknown[] = []> = T['length'] extends N ? T : BuildTuple<N, [unknown, ...T]>
